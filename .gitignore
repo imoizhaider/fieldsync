@@ -1,0 +1,13 @@
+node_modules/
+dist/
+artifacts/
+test-results/
+playwright-report/
+tests/.auth/
+tests/fixtures/generated/
+src/js/config.js
+src/js/vendor/
+src/fonts/
+.env
+.env.*
+!.env.example

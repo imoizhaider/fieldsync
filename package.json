@@ -1,0 +1,32 @@
+{
+  "name": "fieldsync",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first field data collection PWA (CEP 2)",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
+    "lint": "eslint .",
+    "test:unit": "node --test tests/unit/merge.test.js",
+    "schema": "node scripts/apply-schema.mjs",
+    "seed": "node scripts/seed.mjs",
+    "test:e2e": "playwright test",
+    "scan": "node scripts/scan.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "dexie": "^4.4.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@playwright/test": "^1.65.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "pg": "^8.23.1"
+  }
+}

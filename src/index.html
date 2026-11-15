@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FieldSync</title>
+  <meta name="description" content="Offline-first field data collection for soil, water and wildlife records.">
+  <meta name="theme-color" content="#111A15">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FieldSync">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="no-nav">
+  <div id="statusbar" role="status" data-tone="offline"></div>
+  <div id="app">
+    <div id="panes">
+      <section id="pane-list" class="pane" hidden></section>
+      <main id="pane-detail" class="pane"></main>
+    </div>
+    <nav id="nav" aria-label="Main">
+      <a href="#/records" data-nav="records">Records</a>
+      <a href="#/tracks" data-nav="tracks">Tracks</a>
+      <a href="#/sync" data-nav="sync">Sync</a>
+    </nav>
+  </div>
+  <div id="sheet-root"></div>
+  <noscript>FieldSync needs JavaScript.</noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
