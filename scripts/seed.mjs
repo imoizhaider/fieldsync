@@ -9,9 +9,10 @@ import { resolve } from 'node:path';
 import pg from 'pg';
 import { createClient } from '@supabase/supabase-js';
 import { loadEnv, ROOT } from './env.mjs';
+import { ensureAccount } from './lib/accounts.mjs';
 
 const env = loadEnv();
-for (const k of ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SUPABASE_DB_URL']) {
+for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_KEY', 'SUPABASE_DB_URL']) {
   if (!env[k]) { console.error(`seed: ${k} is not set (see .env.example)`); process.exit(2); }
 }
 
@@ -36,6 +37,10 @@ const MEMBERS = [
 ];
 
 const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+// Public-key client, only to check that a demo password still works (see lib/accounts.mjs).
+const anon = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 // The admin API is called over the network; retry a dropped request a few times.
@@ -68,14 +73,8 @@ try {
   const { data: list } = await retry('list users', () => admin.auth.admin.listUsers({ page: 1, perPage: 200 }));
   const ids = {};
   for (const u of USERS) {
-    const found = list.users.find((x) => x.email === u.email);
-    if (found) {
-      await retry(`update ${u.email}`, () => admin.auth.admin.updateUserById(found.id, { password, email_confirm: true }));
-      ids[u.key] = found.id;
-    } else {
-      const { data } = await retry(`create ${u.email}`, () => admin.auth.admin.createUser({ email: u.email, password, email_confirm: true }));
-      ids[u.key] = data.user.id;
-    }
+    const found = list.users.find((x) => x.email === u.email) ?? null;
+    ids[u.key] = (await ensureAccount({ admin, anon, existing: found, email: u.email, password, retry })).id;
     await db.query(
       'insert into public.profiles (user_id, display_name) values ($1, $2) on conflict (user_id) do update set display_name = excluded.display_name',
       [ids[u.key], u.name]);
