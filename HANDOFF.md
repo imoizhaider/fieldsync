@@ -4,7 +4,7 @@ What a person still has to do. Nothing here blocks `npm run verify`.
 
 ## Must do
 
-1. **Deploy the app to a free HTTPS host.** Nothing has been published; the repository has no remote yet.
+1. **Deploy the app to a free HTTPS host.** Done: https://fieldsync-cep2.netlify.app/ deploys from `main` on GitHub. The steps below are kept for a second host.
    - Create a GitHub repository and push: `git remote add origin <url>` then `git push -u origin main`.
    - GitHub Pages: add the repository variables `SUPABASE_URL` and `SUPABASE_ANON_KEY`, set Pages source to "GitHub Actions". The workflow is `.github/workflows/pages.yml`.
    - Or Netlify: connect the repository and add the same two environment variables. `netlify.toml` is ready.
@@ -35,3 +35,11 @@ npm ci
 npx playwright install chromium
 npm run verify
 ```
+
+## After the QA fixes (16 November 2026)
+
+- **Netlify badge (K09, MANUAL if you want it gone).** The app now keeps the badge's strip free, so it no longer covers any button (QA case K09 passes on the live site). To remove the badge itself: on the free plan it cannot be switched off (Netlify's own badge script, `/.netlify/scripts/hud`, ignores a dismissal when the account tier is "free"). Check the Netlify site settings for a badge option after upgrading; the alternatives are a paid plan or hosting on GitHub Pages (the workflow `.github/workflows/pages.yml` is ready; add the two repository variables and set Pages source to GitHub Actions).
+- **Real phone check** (QA report, section 6) is still worth doing once: items 1, 9 and 11 in particular (badge, one bar of signal, a deploy while a record is pending). All three passed in Chromium.
+- **Right before recording:** `npm run seed` was run at the end of the fix work, so the tables are empty and the three demo accounts exist with the password in `.env.local`. Running it again is safe and gives empty tables.
+- **Netlify security headers (I15, P3, optional):** add a `[[headers]]` block for `/*` in `netlify.toml` with `X-Content-Type-Options = "nosniff"`, `Referrer-Policy = "strict-origin-when-cross-origin"` and a Content-Security-Policy that allows only `'self'` and the Supabase URL. Not done here because a wrong CSP would break the live demo, and it was not a failing case.
+- **Supabase self sign-up (security finding 4, P2 in the report's findings table, not a failing case):** Supabase dashboard > Authentication > Sign In / Providers > turn off "Allow new users to sign up". A stranger's account could not read anything, but it could call both sync functions.

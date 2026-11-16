@@ -6,6 +6,8 @@ Suite: `tests/qa/` (`npm run qa`). Plan: `tests/qa/PLAN.md`. Evidence: `artifact
 
 No app code was changed. Nothing was pushed or deployed. `npm run verify` and `npm run seed` were not run.
 
+> **After fixes (16 November 2026):** every P0, P1 and P2 failure below is fixed and passes on the live site. New counts: PASS 111, FAIL 0, FLAKY 0, BLOCKED 1 (E06, checked across two real deploys instead). Details in section 8. Sections 1 to 7 are the original QA run and are kept as they were.
+
 ## 1. Summary
 
 | | Count |
@@ -304,3 +306,55 @@ Whole database, before QA and after cleanup:
 | After cleanup, 16 Nov | 3 | 8 | 3 | 3 | 19 | 18 | 18 | 5 | 21 | 78 | 33 |
 
 The four numbers that grew are not QA rows. `node tests/qa/lib/drift.mjs` (read-only) lists every non-QA row newer than the baseline: all are in Region A and were written by the demo accounts "Researcher A" and "Data lead" between 12:25 and 15:17 UTC on 15 November, for example a soil record titled "Hahaha" created and deleted at 13:16 with its GPS point, one track at 12:26, 7 applied ops and 4 new device rows. The QA suite never signed in as a demo user, so these come from someone using the demo by hand while the QA was running. They were left untouched.
+
+## 8. After fixes
+
+Dates: 16 November 2026. Fix log with the failing "before" run and the passing "after" run of every case: `tests/qa/FIXES.md` (logs in `artifacts/fix/`). Server changes are in `supabase/schema.sql` and were applied to the live project with `npm run schema`; a query on the live database confirmed the new `sync_push` and the unchanged read-only policies. App changes were pushed to `main` and deployed by Netlify (service worker version `0e37935c2d80`, then `1e337452450f`).
+
+`npm run verify` was run twice in a row after the fixes: 12 of 12 gates and 6 of 6 other named tests passed both times.
+
+### New counts (live site, `npm run qa` spec by spec, normal retries)
+
+| | Before | After |
+| --- | --- | --- |
+| Cases | 112 | 112 |
+| PASS | 94 | 111 |
+| FAIL | 14 | 0 |
+| FLAKY | 3 | 0 |
+| BLOCKED | 1 | 1 |
+
+The full suite ran on build `0e37935c2d80`. The second deploy (`1e337452450f`, `dir="auto"` on user text, needed for the E06 check) was followed by a rerun of the records (B) and UI (K) specs on the new build: all passed. The suite was run one spec file at a time (K08 alone) to keep memory low; `run.mjs --keep` merges the results into `artifacts/qa/results.json`.
+
+### Each bug
+
+| Bug | Severity | Status | What changed | Proof |
+| --- | --- | --- | --- | --- |
+| I11 | P0 | FIXED | `sync_push` reads the region of an existing photo from the photo itself, and the delete is filtered by that region | I11 PASS (was "applied", now rejected; photo stays) |
+| G08 | P1 | FIXED | a delete carries its base version; fields another device wrote after it go to `conflict_log` as `edit_vs_delete`, restorable. The delete still wins | G08 PASS; G01 to G09 PASS |
+| F12 | P1 | FIXED | every backend request has a deadline (30 s, 120 s for photos); a timeout is a normal failure, the outbox stays, backoff continues | F12 PASS, recovered without reload; F01 to F13 PASS |
+| I12 | P1 | FIXED | a device id belongs to its first user; a push from another user with it is rejected, the device row keeps its owner | I12 PASS |
+| K09 | P1 | FIXED (app) / MANUAL (badge itself) | the layout keeps the strip under a badge fixed to the bottom edge free; the badge cannot be turned off on Netlify's free plan, see HANDOFF.md | K09 PASS on the live site with the badge present (0 controls covered) |
+| I13 | P2 | FIXED | a GPS row may only link to a record of its own region | I13 PASS |
+| B05 | P2 | FIXED | the form refuses text in a number field; `sync_push` refuses it too | B05 PASS |
+| B06 | P2 | FIXED | pH must be 0 to 14, in the form and in `sync_push` | B06 PASS |
+| B16 | P2 | FIXED | long words in notes and titles wrap | B16 PASS |
+| E09 | P2 | FIXED | `index.html` shows a loading text, retries once, then shows a message with "Try again"; the worker caches files one by one with retries | E09 PASS (message and button visible) |
+| K02 | P2 | FIXED | `#panes` may shrink, so the console table scrolls inside its box; Export CSV and Refresh stay on screen | K02 PASS at 1280 and 1440 with the 200-record region |
+| K06 | P2 | FIXED | sheets take focus, keep Tab inside, close on Escape; "Skip to New record" is the first Tab stop on the list | K06 PASS |
+| K07 | P2 | FIXED | photo number labels use the ink colour (AA); console tables are focusable regions | K07 PASS |
+| L04 | P3 | FIXED (optional) | UTF-8 byte-order mark; formula-like cells written as text | L04 PASS |
+| E06 | P1 | PASS by a real-deploy check (the case itself stays BLOCKED) | `tests/qa/e06-redeploy.mjs`: a kept browser profile with a record saved offline on build `0e37935c2d80`; after deploying `1e337452450f` the app opened on the new code, only the new cache was left, the pending record and GPS point were still in the outbox, and then uploaded | `artifacts/qa/E06/manual-before.json`, `manual-after.json` |
+
+Former FLAKY cases A10, K04 and K08 passed on every attempt. A10 had failed when a file of the app was dropped (same cause as E09), which is now handled. Lighthouse (mobile): performance 99, accessibility 100, best practices 100, SEO 100.
+
+### Still open or manual
+
+- Netlify badge: covered app controls are fixed; the badge itself can only go with a paid plan or another host (HANDOFF.md).
+- Security finding 4 (open self sign-up, P2 in the findings table, not a failing case): a Supabase dashboard setting, MANUAL (HANDOFF.md).
+- Security finding 5 (host security headers, P3): not changed, steps in HANDOFF.md.
+- K06 still writes the note "took about 90 Tab presses to reach New record", because the case counts Tabs to the foot button `#new-record`; the skip link is the first Tab stop. The test was not changed.
+- Findings from passing cases (D07, C04, C06/C07 Storage files, A06, F05, G03, Enter key in forms) are unchanged; the reasons are in DECISIONS.md (55).
+
+### Cleanup
+
+QA rows were deleted with `node tests/qa/run.mjs --cleanup-only` after the live run (proof in `artifacts/qa/cleanup.json`), then `npm run seed` reset the demo data and the three demo accounts.

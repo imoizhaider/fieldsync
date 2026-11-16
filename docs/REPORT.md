@@ -98,6 +98,8 @@ How it knows what happened: every record has a `version` that goes up by one on 
 | Different fields edited on two devices | Keep both changes | A sets pH 6.8, B sets notes. Result: pH 6.8 and B's notes |
 | Same field edited on two devices | The edit the **server receives later** wins. The value it replaced is saved in `conflict_log` | A sets pH 6.1, B sets pH 6.9, A syncs first. Result: pH 6.9. Log: 6.1, lost by A |
 | Edit of a record another device deleted | The delete wins. The edit is saved in `conflict_log` and can be restored from there | A deletes, B edits notes offline. Record stays deleted. Log: B's notes |
+| Delete based on an older version than the server has | The delete wins. Every field another device wrote after that version is saved in `conflict_log` and can be restored | A edits pH and syncs; B, still on the old version, deletes. Record deleted. Log: A's pH and notes |
+| Value that is not a number in a reading, or pH outside 0 to 14 | Refused by the form, and by `sync_push` for any other client | |
 | New record, photo or track | Always accepted. The device-made UUID means a retry cannot create a second copy | |
 | Photo upload interrupted | Stays in the outbox, retried with backoff on the next connection | |
 
@@ -114,14 +116,16 @@ How it knows what happened: every record has a `version` that goes up by one on 
 - Researchers sign in with Supabase Auth (email and password).
 - Row Level Security lets a user read only rows of regions listed for them in `region_members`. There are no write policies at all.
 - Writes go through `sync_push`, which checks the caller's role in the region for every change. A view-only or unassigned region answers "rejected", the change stays safe on the device, and the app shows "Sync rejected" with the reason.
+- `sync_push` trusts no id the client sends about ownership: the user is `auth.uid()`, the role comes from `region_members`, the region of a photo or GPS row that already exists is read from that row, and a GPS point may only point at a record of its own region.
+- A device id belongs to the user who used it first. A push from another user with that id is rejected, so nobody can pose as a colleague's device to hide a conflict or take over its row.
 - Photos live in a private Storage bucket. The first folder of each file name is the region id, and the Storage policies apply the same region check.
 - Only the public key is in the built app. `npm run scan` fails the build check if the service key, a database connection string or any CDN URL appears in `dist/`.
 
 ## 6. Test results
 
-`npm run verify` runs lint, 17 unit tests of the merge logic, the build, schema apply, seed, 18 end-to-end tests and the secret scan. The end-to-end tests run real Chromium against the real Supabase project. Two browser contexts act as device A and device B, each with its own IndexedDB and its own account, and each test checks three places: the screen, IndexedDB, and Postgres plus Storage. Offline is simulated with the browser's offline switch; the interrupted upload is simulated by cutting the Storage request mid-flight.
+`npm run verify` runs lint, 23 unit tests (merge logic, reading validation, CSV cells and the request deadline), the build, schema apply, seed, 18 end-to-end tests and the secret scan. The end-to-end tests run real Chromium against the real Supabase project. Two browser contexts act as device A and device B, each with its own IndexedDB and its own account, and each test checks three places: the screen, IndexedDB, and Postgres plus Storage. Offline is simulated with the browser's offline switch; the interrupted upload is simulated by cutting the Storage request mid-flight.
 
-Result of `npm run verify` on 15 November 2026, on a fresh clone in a temporary folder against the hosted Supabase project, run twice in a row: **12 of 12 gates passed both times**, plus 6 of 6 other named tests (145 s and 132 s).
+Result of `npm run verify` on 16 November 2026, after the QA fixes, against the hosted Supabase project, run twice in a row: **12 of 12 gates passed both times**, plus 6 of 6 other named tests (137 s and 135 s).
 
 | Gate | Check | Pass when | Result |
 | --- | --- | --- | --- |
@@ -137,6 +141,8 @@ Result of `npm run verify` on 15 November 2026, on a fresh clone in a temporary 
 | G10 | Scan build for service key and CDN URLs | Nothing found | PASS |
 | G11 | Manifest and service worker check | Installable | PASS |
 | G12 | Screens at 390, 820, 1280 px | No horizontal scroll, 44 px targets, compared by eye with design/ | PASS |
+
+**Independent QA on the live site** (`npm run qa`, 112 black-box cases, `docs/QA_REPORT.md`). Before the fixes: PASS 94, FAIL 14, FLAKY 3, BLOCKED 1. After the fixes, against https://fieldsync-cep2.netlify.app/ on 16 November 2026: **PASS 111, FAIL 0, FLAKY 0, BLOCKED 1**. The one BLOCKED case (E06, a new deploy replaces the cached app) cannot be faked inside the test browser; it was checked across two real deploys with `tests/qa/e06-redeploy.mjs` and passed. Lighthouse (mobile): performance 99, accessibility 100, best practices 100, SEO 100.
 
 ### Requirement coverage
 
