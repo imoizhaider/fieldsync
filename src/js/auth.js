@@ -4,6 +4,7 @@
 import { createClient } from './vendor/supabase.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { openDb, closeDb, setMeta } from './db.js';
+import { fetchWithTimeout } from './net.js';
 
 const USER_KEY = 'fieldsync.user';
 
@@ -12,6 +13,8 @@ export const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 export const supabase = configured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { storageKey: 'fieldsync-auth', persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    // Every request to the backend has a deadline (see net.js).
+    global: { fetch: (input, init) => fetchWithTimeout(input, init) },
   })
   : null;
 

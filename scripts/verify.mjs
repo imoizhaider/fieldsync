@@ -40,7 +40,7 @@ const node = process.execPath.includes(' ') ? `"${process.execPath}"` : process.
 const backend = hasBackend();
 
 const lintOk = run('lint', 'npx', ['eslint', '.']);
-const unitOk = run('unit tests', node, ['--test', 'tests/unit/merge.test.js']);
+const unitOk = run('unit tests', node, ['--test', 'tests/unit/merge.test.js', 'tests/unit/net.test.js']);
 const buildOk = run('build', node, ['scripts/build.mjs']);
 
 let e2eRan = false;
