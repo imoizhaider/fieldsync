@@ -43,3 +43,9 @@ npm run verify
 - **Right before recording:** `npm run seed` was run at the end of the fix work, so the tables are empty and the three demo accounts exist with the password in `.env.local`. Running it again is safe and gives empty tables.
 - **Netlify security headers (I15, P3, optional):** add a `[[headers]]` block for `/*` in `netlify.toml` with `X-Content-Type-Options = "nosniff"`, `Referrer-Policy = "strict-origin-when-cross-origin"` and a Content-Security-Policy that allows only `'self'` and the Supabase URL. Not done here because a wrong CSP would break the live demo, and it was not a failing case.
 - **Supabase self sign-up (security finding 4, P2 in the report's findings table, not a failing case):** Supabase dashboard > Authentication > Sign In / Providers > turn off "Allow new users to sign up". A stranger's account could not read anything, but it could call both sync functions.
+
+## After the online sign-out fix (16 November 2026)
+
+- **Sign in once more on every device you used before this fix.** Earlier `npm run seed` and `npm run verify` runs ended every session of the three demo accounts. On the new build the app says "Online / sign-in needed to sync"; open Sync and press **Sign in again**. Pending records stay on the device and upload right after. From now on a seed run keeps the sessions.
+- **Do not change a demo account's password in the Supabase dashboard** (or `SEED_PASSWORD`) shortly before recording: Supabase signs that account out on every device whenever its password is set, even to the same value.
+- `npm run seed` still empties the data tables, as before.

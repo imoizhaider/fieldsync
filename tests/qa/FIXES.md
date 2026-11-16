@@ -42,6 +42,42 @@ Notes:
 - I01 failed once in the regression run because K01 had just added QA user B to its helper region `QA-<ts>-E`; I01 expects B to see only B's own regions. In `npm run qa` the order is A to L, so I runs before K. The empty helper region was removed and I01 passed. No test changed.
 - K06 still prints the finding "took 90 Tab presses" because the case counts Tabs to `#new-record` (the button at the foot). A "Skip to New record" link is now the first Tab stop on the list. The test was not changed.
 
+## Online sign-out (P0, reported by the owner, 16 November 2026)
+
+**Cause:** every `npm run seed` (and so every `npm run verify`) set the demo accounts' password through the admin API, and Supabase Auth deletes every session of a user whenever an admin sets its password, even to the same value; about an hour later each device's access token ran out, the refresh answered 400 `refresh_token_not_found`, and the app had no way back but Sign out. Proof: `artifacts/fix/signout/probe.json` (step "SEED": sessions 2 -> 0, refresh 400, control user 200) and `artifacts/fix/signout/audit.json` (0 live sessions for the demo accounts after the earlier seeds; 8 live after two verify runs with the fix).
+
+Second, smaller cause found on the way: a token refresh that failed for a network or server reason (503, the app's 30 s deadline) was shown as "sign-in needed" (M10).
+
+Suspects:
+
+| Id | Theory | Verdict | Evidence |
+| --- | --- | --- | --- |
+| S1 | refresh token rotation, two places one account | not the cause | probe "S1 both devices refresh" 200/200; M02 PASS before the fix |
+| S2 | 401/403 from a data call becomes a sign-out | not the cause | `rpc()` throws a sync error, no `signOut` or `onAuthStateChange` in `src/`; M04 PASS before |
+| S3 | free space or cache cleanup removes the session | not the cause | `freeSyncedPhotos` only clears photo blobs; M05 PASS before |
+| S4 | two clients fight over the session | not the cause | one `createClient` in `src/js/auth.js` |
+| S5 | a reload during a refresh leaves a dead token | not the cause | probe "S5": the replaced token reused after 12 s still answered 200; M06 PASS before |
+| seed | admin password reset ends all sessions | **the cause** | probe "SEED"; M09 FAIL before (0 sessions left), PASS after |
+| UI | a dead session has no way back | **real** | M03, M07 FAIL before (no "Sign in again"), PASS after |
+| retry | refresh outage shown as sign-in | **real** | M10 FAIL before ("Online / sign-in needed" during a 503), PASS after |
+
+Runs, localhost, one spec at a time (`artifacts/fix/signout/before-m*.log`, `after-m*.log`; auth traffic per case in `artifacts/fix/signout/before/` and `after/`):
+
+| Case | Before | After |
+| --- | --- | --- |
+| M01 online refresh | PASS | PASS |
+| M02 two tabs + second device | PASS (first run failed on a test bookkeeping error: the phone signs in on purpose; fixed in the test) | PASS |
+| M03 refresh 400 | FAIL: no "Sign in again" on the Sync screen | PASS |
+| M04 RPC 401/403, real rejection | PASS | PASS |
+| M05 free space, caches | PASS | PASS |
+| M06 long idle gap | PASS | PASS |
+| M07 server ended the sessions | FAIL: no "Sign in again" | PASS: record and 2 photos uploaded after signing in again |
+| M08 offline past expiry | PASS | PASS |
+| M09 seed account step | FAIL: sessions 1 -> 0 | PASS: action "kept", sessions kept |
+| M10 refresh 503 for 45 s | FAIL: bar "Online / sign-in needed" (first run passed only because the outage was shorter than auth-js's own 30 s retry; the test now outlasts it) | PASS |
+
+Regression after the fix, localhost, one spec at a time: A 10/10, B 16/16, C 9/9, D 8/8, E 8/8, F 13/13, G 9/9, H 5/5, I 14/15 (I15 host headers, live only), J 4/4, K01-K07 7/7, L 5/5, M 10/10. Two order effects, no test changed: L01 counts the members of the main QA region, and the first M run had put its users there (M users now get their own region `QA-<ts>-M`); I01 failed after K01 had added B to its empty helper region `QA-<ts>-E` (removed, I01 passed, same as in the first fix round). `npm run verify` twice in a row: 12/12 and 6/6 both times (136 s, 133 s).
+
 ## Done
 
 1. QA rows cleaned, `npm run verify` passed twice in a row (12/12, 6/6).
