@@ -1,5 +1,5 @@
 // Sync screen: what is uploading, what is waiting, what was rejected.
-import { html, render, mmss, bytes, openSheet, pad2 } from '../html.js';
+import { html, render, mmss, bytes, openSheet, pad2, go } from '../html.js';
 import { db } from '../db.js';
 import { conflicts } from '../queries.js';
 import { formatLabel } from '../merge.js';
@@ -67,7 +67,8 @@ export async function mount(el) {
       card = html`<div class="notice warn" id="sync-retry" style="display:block"><h2>Upload interrupted</h2>
         <p>Nothing is lost. Trying again in <span id="retry-clock">${mmss(retryIn)}</span>.</p></div>`;
     } else if (state.needsSignIn) {
-      card = html`<div class="notice outline-bad"><h2>Sign-in needed</h2><p>Your session ended. Sign in again to upload. Your records stay on this device.</p></div>`;
+      card = html`<div class="notice outline-bad"><h2>Sign-in needed</h2><p>Your session ended. Sign in again to upload. Your records stay on this device.</p>
+        <div class="actions" style="margin-top:12px"><button class="btn" data-act="signin-again" id="sign-in-again">Sign in again</button></div></div>`;
     } else if (outbox.length === 0) {
       card = html`<div class="notice ink" id="sync-clear"><h2>Everything is uploaded</h2><p class="muted">Changes from other devices arrive on each sync.</p></div>`;
     } else {
@@ -113,6 +114,7 @@ export async function mount(el) {
   el.addEventListener('click', async (ev) => {
     const act = ev.target.closest('[data-act]')?.dataset.act;
     if (act === 'sync') syncNow({ manual: true });
+    if (act === 'signin-again') go('#/signin/again');
     if (act === 'retry') { await retryRejected(); syncNow({ manual: true }); }
     if (act === 'details') {
       const rows = await describe((await db.outbox.toArray()).filter((e) => e.status === 'rejected'));

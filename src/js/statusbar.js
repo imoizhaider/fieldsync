@@ -36,7 +36,7 @@ export function paint() {
     right = 'Starting sync';
   } else if (state.needsSignIn) {
     tone = 'problem';
-    left = 'Online / sign-in needed';
+    left = 'Online / sign-in needed to sync';
   } else if (state.rejected > 0) {
     tone = 'problem';
     left = 'Online / sync problem';

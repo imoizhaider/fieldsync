@@ -1,8 +1,11 @@
 import { html, render, go } from '../html.js';
-import { signIn, configured } from '../auth.js';
+import { signIn, configured, currentUser } from '../auth.js';
 import { startAutoSync, syncNow } from '../sync.js';
 
-export async function mount(el) {
+export async function mount(el, params) {
+  // #/signin/again: the session ended while this user stays signed in on the
+  // device (records and outbox kept). Same form, email filled in.
+  const again = params?.arg === 'again' ? currentUser() : null;
   render(el, html`
     <div class="signin">
       <section class="brand" aria-hidden="true">
@@ -25,7 +28,7 @@ export async function mount(el) {
           </div>
           <div>
             <div class="eyebrow lead-eyebrow">Data lead</div>
-            <h1 class="title">Sign in</h1>
+            <h1 class="title">${again ? 'Sign in again' : 'Sign in'}</h1>
           </div>
           <label class="field"><span class="label">Email</span>
             <input name="email" type="email" autocomplete="username" inputmode="email" placeholder="researcher@example.org" required></label>
@@ -33,7 +36,9 @@ export async function mount(el) {
             <input name="password" type="password" autocomplete="current-password" required></label>
           <p class="error-text small" role="alert" id="signin-error" hidden></p>
           <button class="btn block" type="submit">Sign in</button>
-          <p class="muted small">Your session is saved on this device. Next time fieldsync opens with no signal.</p>
+          ${again
+            ? html`<p class="muted small" id="signin-again-note">Your session ended. Your records stay on this device and upload after you sign in.</p>`
+            : html`<p class="muted small">Your session is saved on this device. Next time fieldsync opens with no signal.</p>`}
           <div class="spacer"></div>
           <div class="notice hint small"><b>No signal right now?</b> You can still open FieldSync if you signed in on this device before. A first sign-in needs a connection.</div>
         </form>
@@ -43,6 +48,10 @@ export async function mount(el) {
   const form = el.querySelector('form');
   const error = el.querySelector('#signin-error');
   const button = form.querySelector('button');
+  if (again) {
+    form.email.value = again.email ?? '';
+    form.password.focus();
+  }
   if (!configured) {
     error.hidden = false;
     error.textContent = 'This build has no Supabase project configured. See README.md.';

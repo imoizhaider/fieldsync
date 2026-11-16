@@ -255,7 +255,12 @@ async function run() {
   try {
     const { data, error } = await supabase.auth.getSession();
     if (!data?.session) {
-      if (error && /fetch|network/i.test(error.message ?? '')) throw new SyncError('could not refresh the session');
+      // A refresh that failed for a network or server reason (offline, timeout,
+      // 5xx) leaves the session stored: that is a sync failure, retried with
+      // backoff. Only a session the server really ended needs a new sign-in.
+      if (error && (error.name === 'AuthRetryableFetchError' || /fetch|network/i.test(error.message ?? ''))) {
+        throw new SyncError('could not refresh the session');
+      }
       update({ needsSignIn: true });
       return;
     }

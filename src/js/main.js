@@ -59,7 +59,7 @@ async function route() {
 
   if (!user && name !== 'styleguide') {
     name = 'signin';
-  } else if (user && (name === '' || name === 'signin')) {
+  } else if (user && (name === '' || (name === 'signin' && arg !== 'again'))) {
     name = (await isLead()) ? 'console' : 'records';
     autoRouted = true;
     history.replaceState(null, '', `#/${name}`);
