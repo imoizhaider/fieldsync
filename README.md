@@ -4,6 +4,8 @@ An installable web app (PWA) for recording soil, water and wildlife data with no
 
 Built for CEP 2. Everything runs on free tiers: a static host and one Supabase project.
 
+**Live app:** https://fieldsync-cep2.netlify.app/ (deployed on Netlify from `main`)
+
 - Requirements: [docs/PRD.md](docs/PRD.md)
 - How it works and test results: [docs/REPORT.md](docs/REPORT.md)
 - 3 minute demo, click by click: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
@@ -109,7 +111,7 @@ The build output is the folder `dist/`. It is plain static files with relative p
 3. In Settings, Pages, set Source to GitHub Actions.
 4. Push to `main`. The workflow `.github/workflows/pages.yml` builds and publishes the site.
 
-**Netlify**
+**Netlify** (the official deploy: https://fieldsync-cep2.netlify.app/, built from `main` on every push)
 
 1. New site from Git, pick the repository. `netlify.toml` already sets the build command and the publish folder.
 2. In Site settings, Environment variables, add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
