@@ -16,5 +16,5 @@ export default [
   { files: ['src/**/*.js'], languageOptions: { globals: { ...globals.browser } } },
   { files: ['src/sw.js'], languageOptions: { globals: { ...globals.serviceworker, __PRECACHE__: 'readonly' } } },
   { files: ['scripts/**', 'tests/**', '*.js', '*.mjs'], languageOptions: { globals: { ...globals.node } } },
-  { files: ['tests/e2e/**'], languageOptions: { globals: { ...globals.node, ...globals.browser } } },
+  { files: ['tests/e2e/**', 'tests/qa/**'], languageOptions: { globals: { ...globals.node, ...globals.browser } } },
 ];
