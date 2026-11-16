@@ -140,6 +140,27 @@ exception when others then
   return null;
 end $$;
 
+-- Readings are numbers and pH is on the pH scale. The form checks this too,
+-- but the form is not the only program that can call sync_push.
+create or replace function public.check_record_fields(p_changed jsonb)
+returns void language plpgsql immutable as $$
+declare
+  v_key text;
+  v_val jsonb;
+begin
+  for v_key, v_val in select * from jsonb_each(coalesce(p_changed, '{}'::jsonb)) loop
+    if v_key in ('ph', 'moisture', 'temperature', 'depth', 'turbidity', 'oxygen', 'count') then
+      if jsonb_typeof(v_val) not in ('number', 'null') then
+        raise exception '% must be a number', v_key using errcode = '22023';
+      end if;
+      if v_key = 'ph' and jsonb_typeof(v_val) = 'number'
+         and ((v_val #>> '{}')::numeric < 0 or (v_val #>> '{}')::numeric > 14) then
+        raise exception 'pH must be between 0 and 14' using errcode = '22023';
+      end if;
+    end if;
+  end loop;
+end $$;
+
 -- --------------------------------------------------- Row Level Security
 -- Clients can only read, and only regions listed for them in region_members.
 -- There are no insert/update/delete policies: every write goes through
@@ -205,7 +226,16 @@ create policy devices_read on public.devices for select to authenticated
 --     replaces goes to conflict_log
 --   * edit against a deleted record           -> the delete wins; the edit
 --     goes to conflict_log so it can be restored
+--   * delete of a record that another device edited after the version the
+--     deleting device last saw                -> the delete wins; the edited
+--     values go to conflict_log so they can be restored
 --   * every op id is applied at most once      -> retries cannot duplicate
+--
+-- Nothing the client sends is trusted to say who it is or where a row lives:
+--   * the user is auth.uid(); the role comes from region_members
+--   * the region of a row that already exists is read from that row
+--   * a device id belongs to the user who used it first; a push that names
+--     the device id of another user is rejected
 
 create or replace function public.sync_push(p_device_id text, p_ops jsonb)
 returns jsonb
@@ -226,6 +256,11 @@ declare
   v_base     integer;
   v_rec      public.records%rowtype;
   v_gps      public.gps_logs%rowtype;
+  v_med      public.media%rowtype;
+  v_grec     uuid;
+  v_owner    uuid;
+  v_dev_ok   boolean := false;
+  v_dev_why  text := 'a device id is required';
   v_con      public.conflict_log%rowtype;
   v_fields   jsonb;
   v_meta     jsonb;
@@ -246,7 +281,23 @@ begin
     raise exception 'not signed in' using errcode = '28000';
   end if;
 
+  -- Device rule: the id is registered to the first user who pushes with it.
+  -- "Same device" in the merge below is only believed for the registered owner.
+  if p_device_id is not null and length(p_device_id) between 1 and 100 then
+    insert into public.devices (device_id, user_id) values (p_device_id, v_uid)
+      on conflict (device_id) do nothing;
+    select d.user_id into v_owner from public.devices d where d.device_id = p_device_id;
+    v_dev_ok := v_owner is not distinct from v_uid;
+    v_dev_why := 'this device id is registered to another user';
+  end if;
+
   for v_op in select * from jsonb_array_elements(coalesce(p_ops, '[]'::jsonb)) loop
+    if not v_dev_ok then
+      v_results := v_results || jsonb_build_array(jsonb_build_object('status', 'rejected',
+        'op_id', v_op->>'op_id', 'table', v_op->>'table', 'row_id', v_op->>'row_id',
+        'reason', v_dev_why, 'code', '42501'));
+      continue;
+    end if;
     v_op_id := public.try_uuid(v_op->>'op_id');
 
     -- Idempotency: an op that was already applied answers with its first result.
@@ -275,11 +326,18 @@ begin
         if found then v_region := v_rec.region_id;
         else v_region := public.try_uuid(v_op->>'region_id'); end if;
       elsif v_table = 'media' then
-        select * into v_rec from public.records r where r.id = public.try_uuid(v_op->>'record_id');
+        -- A photo that is already on the server decides its own record and
+        -- region. The record id in the op is only used for a new photo.
+        select * into v_med from public.media m where m.id = v_id for update;
+        if found then
+          select * into v_rec from public.records r where r.id = v_med.record_id;
+        else
+          select * into v_rec from public.records r where r.id = public.try_uuid(v_op->>'record_id');
+        end if;
         if not found then
           raise exception 'the record for this photo is not on the server' using errcode = '23503';
         end if;
-        v_region := v_rec.region_id;
+        v_region := coalesce(v_med.region_id, v_rec.region_id);
       elsif v_table = 'gps_logs' then
         select * into v_gps from public.gps_logs g where g.id = v_id for update;
         if found then v_region := v_gps.region_id;
@@ -306,6 +364,9 @@ begin
 
       -- ------------------------------------------------------- records
       if v_table = 'records' then
+        if v_kind in ('upsert', 'restore') then
+          perform public.check_record_fields(v_changed);
+        end if;
         select * into v_rec from public.records r where r.id = v_id for update;
 
         if not found then
@@ -338,6 +399,20 @@ begin
 
         elsif v_kind = 'delete' then
           if not v_rec.deleted then
+            -- The delete wins. Values another device wrote after the version this
+            -- device last saw would vanish with it, so they are kept in the log.
+            v_base := coalesce(nullif(v_op->>'base_version', '')::integer, 0);
+            for v_key, v_fm in select * from jsonb_each(v_rec.field_meta) loop
+              if (v_fm->>'v')::integer > v_base
+                 and ((v_fm->>'dev') is distinct from p_device_id
+                      or (v_fm->>'by') is distinct from v_uid::text) then
+                insert into public.conflict_log (record_id, region_id, kind, field, lost_value, lost_by,
+                    lost_device, kept_value, kept_by, kept_device, at, updated_at)
+                  values (v_id, v_region, 'edit_vs_delete', v_key, v_rec.fields->v_key,
+                    public.try_uuid(v_fm->>'by'), v_fm->>'dev', null, v_uid, p_device_id, v_now, v_now);
+                v_conflicts := v_conflicts + 1;
+              end if;
+            end loop;
             update public.records set deleted = true, version = version + 1, updated_at = v_now,
               updated_by = v_uid, updated_device = p_device_id where id = v_id;
           end if;
@@ -379,7 +454,8 @@ begin
               -- Another device wrote this field after the version this device
               -- last saw: same-field conflict. This (later) edit wins.
               if v_fm is not null and (v_fm->>'v')::integer > v_base
-                 and (v_fm->>'dev') is distinct from p_device_id then
+                 and ((v_fm->>'dev') is distinct from p_device_id
+                      or (v_fm->>'by') is distinct from v_uid::text) then
                 insert into public.conflict_log (record_id, region_id, kind, field, lost_value,
                     lost_by, lost_device, kept_value, kept_by, kept_device, at, updated_at)
                   values (v_id, v_region, 'same_field', v_key, v_cur,
@@ -410,7 +486,8 @@ begin
       -- --------------------------------------------------------- media
       elsif v_table = 'media' then
         if v_kind = 'delete' then
-          update public.media set deleted = true, updated_at = v_now where id = v_id;
+          update public.media set deleted = true, updated_at = v_now
+            where id = v_id and region_id = v_region;
         else
           v_path := v_op->>'storage_path';
           if v_path is null or v_path <> v_region::text || '/' || v_rec.id::text || '/' || v_id::text || '.jpg' then
@@ -450,9 +527,15 @@ begin
                 where g.region_id = v_region and g.kind = 'track';
             end if;
           end if;
+          -- A GPS row may only point at a record of its own region.
+          v_grec := public.try_uuid(v_op->>'record_id');
+          if v_grec is not null and not exists (
+               select 1 from public.records r where r.id = v_grec and r.region_id = v_region) then
+            raise exception 'the record for this GPS point is not in this region' using errcode = '23503';
+          end if;
           insert into public.gps_logs (id, region_id, record_id, kind, name, seq, points,
               started_at, ended_at, distance_m, created_by, updated_at)
-            values (v_id, v_region, public.try_uuid(v_op->>'record_id'),
+            values (v_id, v_region, v_grec,
               coalesce(v_op->>'gps_kind', 'point'), v_op->>'name', v_seq,
               coalesce(v_op->'points', '[]'::jsonb),
               nullif(v_op->>'started_at', '')::timestamptz,
@@ -487,11 +570,11 @@ begin
     v_results := v_results || jsonb_build_array(v_res);
   end loop;
 
-  if p_device_id is not null then
-    insert into public.devices (device_id, user_id, last_sync_at, last_status)
-      values (p_device_id, v_uid, clock_timestamp(), case when v_rejected then 'rejected' else 'ok' end)
-      on conflict (device_id) do update set user_id = excluded.user_id,
-        last_sync_at = excluded.last_sync_at, last_status = excluded.last_status;
+  -- Only the owner's push updates the device row; the owner never changes.
+  if v_dev_ok then
+    update public.devices set last_sync_at = clock_timestamp(),
+        last_status = case when v_rejected then 'rejected' else 'ok' end
+      where device_id = p_device_id and user_id = v_uid;
   end if;
 
   return jsonb_build_object('server_time', clock_timestamp(), 'results', v_results);
@@ -551,6 +634,7 @@ language sql stable security invoker set search_path = public, pg_temp as $$
   );
 $$;
 
+revoke all on function public.check_record_fields(jsonb) from public, anon;
 revoke all on function public.sync_push(text, jsonb) from public, anon;
 revoke all on function public.sync_pull(timestamptz) from public, anon;
 grant execute on function public.sync_push(text, jsonb) to authenticated;
