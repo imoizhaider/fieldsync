@@ -15,7 +15,7 @@ export const STATE_DIR = resolve(ROOT, 'tests/.auth/qa'); // git-ignored (tests/
 export const STATE_FILE = resolve(STATE_DIR, 'run.json');
 export const FIXTURES = resolve(ROOT, 'tests/fixtures/generated/qa');
 
-const REGION_RE = '^QA-[0-9]{13}(-B|-V|-E)?$';
+const REGION_RE = '^QA-[0-9]{13}(-B|-V|-E|-M)?$';
 const EMAIL_RE = '^qa-(a|b|lead)\\+[0-9]{13}@example\\.org$';
 
 export function readState() {

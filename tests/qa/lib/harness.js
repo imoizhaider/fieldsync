@@ -269,7 +269,7 @@ class QA {
   constructor(browser, testInfo) {
     this.browser = browser;
     this.testInfo = testInfo;
-    this.id = /^([A-L]\d\d)/.exec(testInfo.title)?.[1] ?? 'misc';
+    this.id = /^([A-M]\d\d)/.exec(testInfo.title)?.[1] ?? 'misc';
     this.dir = resolve(ART, this.id);
     if (testInfo.retry === 0) rmSync(this.dir, { recursive: true, force: true });
     mkdirSync(this.dir, { recursive: true });

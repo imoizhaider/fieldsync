@@ -186,3 +186,20 @@ Assumptions where the PRD is silent (closest reading, also noted in the report)
 | L03 | P2 | Deleted records in CSV | Absent or flagged |
 | L04 | P3 | CSV in a spreadsheet | UTF-8 BOM present; cells starting with `=` are neutralised |
 | L05 | P2 | Mark reviewed / Restore from console | Reaches Postgres, open-conflict count drops |
+
+## M. Session while online (added 16 November 2026 after an online sign-out report)
+
+A06 only covered a session that ends while offline. Each M case uses its own throwaway QA user (`qa-a+<13 digits>@example.org`, editor in its own region `QA-<ts>-M`), so a case that ends a session never touches the sessions other specs reuse. A token "expires" by moving `expires_at` of the stored session into the past; the app then refreshes it with the real auth server in seconds instead of an hour. Every `/auth/v1/` request, every 401 or 403 and the console go to `artifacts/fix/signout/<SIGNOUT_PHASE>/Mxx.json`.
+
+| Id | Sev | Case | Pass when |
+| --- | --- | --- | --- |
+| M01 | P0 | Online, the token expires twice and is refreshed | Refreshes answer 200, records reach Postgres, never the sign-in screen, bar never asks for a sign-in |
+| M02 | P0 | One account in two tabs and on a second device (own sign-in), all past a refresh at the same moment | All three stay signed in, no refresh refused, records from both devices reach Postgres |
+| M03 | P0 | Refresh endpoint answers 400 invalid_grant / refresh_token_not_found | No sign-in screen, records and outbox intact and usable, bar says sign-in needed, Sync screen has a working "Sign in again" (email filled in), then everything uploads |
+| M04 | P0 | `sync_push` answers 401, then 403; later the region becomes view-only | Outbox unchanged by the 401/403, upload on retry, never a sign-in; the real rejection still shows Sync rejected |
+| M05 | P1 | Free space, then delete every cache and reload | Still signed in, sync works |
+| M06 | P0 | App closed, stored token a week old, opened again | Refreshed on open, signed in, sync works |
+| M07 | P0 | The server ends every session of the account (admin password reset), then reconnect | Bar says sign-in needed, "Sign in again" works, pending record and both photos reach Postgres and Storage |
+| M08 | P0 | Offline past a token expiry, then back online | No sign-in, the pending record uploads by itself |
+| M09 | P0 | The seed's account step (`scripts/lib/accounts.mjs`) on an account with signed-in devices | No session ended, device keeps syncing; a password that no longer works is still set |
+| M10 | P1 | Token endpoint answers 503 for 45 s (longer than auth-js's own 30 s retry) | Bar never says sign-in; upload continues once the endpoint is back |

@@ -39,7 +39,7 @@ const cases = pwArgs.length > 0 && existsSync(RESULTS) ? JSON.parse(readFileSync
 if (existsSync(out)) {
   const walk = (suite) => {
     for (const spec of suite.specs ?? []) {
-      const m = /^([A-L]\d\d) \[(P\d)\] (.*)$/.exec(spec.title);
+      const m = /^([A-M]\d\d) \[(P\d)\] (.*)$/.exec(spec.title);
       if (!m) continue;
       const t = spec.tests[0];
       const blocked = t.annotations?.find((a) => a.type === 'blocked')
