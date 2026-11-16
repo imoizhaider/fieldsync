@@ -70,11 +70,45 @@ export function isWide() {
   return window.matchMedia('(min-width: 768px)').matches;
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let closeOpenSheet = null;
+
+// Close the sheet that is open, if any (used when the route changes).
+export function closeSheet() {
+  closeOpenSheet?.();
+}
+
 // Bottom sheet. Returns a close function.
+// Keyboard: focus moves into the sheet (onto its first, safe, button), Tab
+// stays inside it, Escape closes it and focus goes back to where it was.
 export function openSheet(tpl, handlers = {}) {
+  closeSheet();
   const root = document.getElementById('sheet-root');
-  render(root, html`<div class="sheet" role="dialog" aria-modal="true"><div class="grip"></div>${tpl}</div>`);
-  const close = () => { root.innerHTML = ''; root.onclick = null; };
+  const opener = document.activeElement;
+  render(root, html`<div class="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grip"></div>${tpl}</div>`);
+  const sheet = root.firstElementChild;
+  const onKey = (ev) => {
+    if (ev.key === 'Escape') { ev.preventDefault(); close(); return; }
+    if (ev.key !== 'Tab') return;
+    const items = [...sheet.querySelectorAll(FOCUSABLE)];
+    if (items.length === 0) { ev.preventDefault(); sheet.focus(); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const inside = sheet.contains(document.activeElement);
+    if (ev.shiftKey && (!inside || document.activeElement === first || document.activeElement === sheet)) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && (!inside || document.activeElement === last)) { ev.preventDefault(); first.focus(); }
+  };
+  function close() {
+    if (closeOpenSheet !== close) return;
+    closeOpenSheet = null;
+    document.removeEventListener('keydown', onKey, true);
+    root.innerHTML = '';
+    root.onclick = null;
+    if (opener?.isConnected) opener.focus?.();
+  }
+  closeOpenSheet = close;
+  document.addEventListener('keydown', onKey, true);
+  (sheet.querySelector(FOCUSABLE) ?? sheet).focus();
   root.onclick = (ev) => {
     if (ev.target === root) return close();
     const btn = ev.target.closest('[data-act]');

@@ -22,7 +22,8 @@ async function exportCsv(region) {
   await db.gpsLogs.each((g) => { if (g.recordId && g.points?.[0]) gpsByRecord[g.recordId] = g.points[0]; });
   const photosByRecord = Object.fromEntries(view.rows.map((x) => [x.record.id, x.photos]));
   const csv = toCsv(view.rows.map((x) => x.record).sort((a, b) => (a.type + pad2(a.seq) < b.type + pad2(b.seq) ? -1 : 1)), { gpsByRecord, photosByRecord, names });
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  // The byte-order mark makes Excel on Windows read the file as UTF-8.
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = `fieldsync-${region.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -73,7 +74,7 @@ export async function mount(el) {
       </div>`);
 
     const table = html`
-      <div class="table-wrap"><table class="data" id="dataset">
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Records of ${region.name}"><table class="data" id="dataset">
         <thead><tr><th>Id</th><th>Type</th><th>Record</th><th>Key reading</th><th>Last edit</th><th>At</th><th>Status</th></tr></thead>
         <tbody>
           ${view.rows.map((x) => {
@@ -90,7 +91,7 @@ export async function mount(el) {
         </tbody></table></div>`;
 
     const researchers = html`
-      <div class="table-wrap"><table class="data"><thead><tr><th>Researcher</th><th>Device</th><th>Last sync</th><th>State</th></tr></thead><tbody>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Devices of ${region.name}"><table class="data"><thead><tr><th>Researcher</th><th>Device</th><th>Last sync</th><th>State</th></tr></thead><tbody>
         ${deviceRows.map((d) => html`<tr><td class="rec">${names[d.user_id]}</td><td class="who">${d.device_id.slice(0, 8)}</td>
           <td>${hhmm(d.last_sync_at)}</td><td><span class="status ${d.last_status === 'ok' ? 'merged' : 'failed'}">${d.last_status === 'ok' ? 'OK' : 'Rejected'}</span></td></tr>`)}
         ${deviceRows.length === 0 ? html`<tr><td colspan="4" class="who">No device has synced yet.</td></tr>` : ''}

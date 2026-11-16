@@ -19,7 +19,13 @@
   <div id="app">
     <div id="panes">
       <section id="pane-list" class="pane" hidden></section>
-      <main id="pane-detail" class="pane"></main>
+      <main id="pane-detail" class="pane">
+        <div id="boot" class="boot">
+          <p class="boot-name">FieldSync</p>
+          <p id="boot-text">Loading the app...</p>
+          <p><button type="button" id="boot-retry" class="btn" hidden>Try again</button></p>
+        </div>
+      </main>
     </div>
     <nav id="nav" aria-label="Main">
       <a href="#/records" data-nav="records">Records</a>
@@ -29,6 +35,41 @@
   </div>
   <div id="sheet-root"></div>
   <noscript>FieldSync needs JavaScript.</noscript>
-  <script type="module" src="js/main.js"></script>
+  <script>
+    // Start-up guard. This plain script runs even when a file of the app fails
+    // to load (bad connection on a first visit), so the screen is never blank:
+    // one automatic retry, then a message with a "Try again" button.
+    (function () {
+      var KEY = 'fieldsync.boot';
+      var ready = function () { return document.documentElement.dataset.ready === '1'; };
+      var tries = function () { try { return Number(sessionStorage.getItem(KEY) || 0); } catch (e) { return 1; } };
+      var reload = function () { location.reload(); };
+      var show = function (text, button) {
+        var t = document.getElementById('boot-text');
+        var b = document.getElementById('boot-retry');
+        if (!t || !b) return;
+        t.textContent = text;
+        b.hidden = !button;
+        b.onclick = function () { try { sessionStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } reload(); };
+      };
+      window.fieldsyncBootFailed = function () {
+        if (ready()) return;
+        if (tries() < 1 && navigator.onLine) {
+          try { sessionStorage.setItem(KEY, '1'); } catch (e) { /* storage blocked */ }
+          show('A file did not load. Trying again...', false);
+          setTimeout(reload, 1500);
+          return;
+        }
+        show('FieldSync could not load completely. Check your connection and try again. Records saved on this device are not affected.', true);
+      };
+      window.addEventListener('error', function (ev) {
+        if (!ready() && ev.target === window) window.fieldsyncBootFailed();
+      });
+      setTimeout(function () {
+        if (!ready() && document.getElementById('boot')) show('Still loading. The connection may be slow.', true);
+      }, 20000);
+    })();
+  </script>
+  <script type="module" src="js/main.js" onerror="fieldsyncBootFailed()"></script>
 </body>
 </html>

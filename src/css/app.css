@@ -32,7 +32,14 @@ body {
   -webkit-text-size-adjust: 100%;
   display: flex; flex-direction: column;
   overflow: hidden;
+  /* Room for a badge the host pins to the bottom of the page (see hostinset.js). */
+  padding-bottom: var(--host-inset, 0px);
 }
+/* Keyboard shortcut past a long list: hidden until it has focus. */
+.skip { position: fixed; left: 8px; top: 8px; z-index: 30; transform: translateY(-200%); }
+.skip:focus, .skip:focus-visible { transform: none; }
+.boot { padding: 44px 24px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.boot .boot-name { font-size: 20px; font-weight: 600; }
 h1, h2, h3, p { margin: 0; }
 button, input, textarea, select { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
@@ -59,7 +66,9 @@ a { color: inherit; text-decoration: none; }
 
 /* ---------------------------------------------------------------- layout */
 #app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-#panes { flex: 1; min-height: 0; display: flex; }
+/* min-width: 0 so a wide table scrolls inside its own box instead of
+   widening the whole page (the console at 1280 px, K02). */
+#panes { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
@@ -129,6 +138,8 @@ a.eyebrow { display: inline-flex; align-items: center; min-height: 44px; min-wid
 .field textarea { resize: none; min-height: 72px; padding-top: 2px; }
 .field .unit { position: absolute; right: 12px; bottom: 14px; font-size: 12px; color: var(--muted); pointer-events: none; }
 .field:focus-within { border-color: var(--accent); outline: 1px solid var(--accent); }
+.field.invalid { border-color: var(--error-text); }
+.field.invalid .label { color: var(--error-text); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stack { display: flex; flex-direction: column; gap: 12px; }
 
@@ -201,9 +212,11 @@ a.row, button.row { width: 100%; text-align: left; background: none; border-left
 .readings > div { padding: 10px 14px 12px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); min-width: 0; }
 .readings .unit { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 4px; }
 .readings .reading { overflow-wrap: anywhere; }
+/* A long word with no spaces wraps instead of running off the screen. */
+.notes-text, .title, .head-back h1 { overflow-wrap: anywhere; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 var(--pad); }
 .photo { width: 80px; height: 80px; border-radius: var(--radius); background: var(--tile) center/cover no-repeat; position: relative; overflow: hidden; flex: none; }
-.photo span { position: absolute; left: 6px; bottom: 4px; font-size: 12px; color: var(--muted); }
+.photo span { position: absolute; left: 6px; bottom: 4px; font-size: 12px; color: var(--ink); }
 .photo.has-img span { color: var(--white); text-shadow: 0 0 2px #000; }
 .photo .remove { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; cursor: pointer; }
 .photo-add { width: 80px; height: 80px; border-radius: var(--radius); border: 1px dashed var(--accent); background: none; color: var(--accent); font-weight: 600; font-size: 12px; cursor: pointer; }
@@ -212,7 +225,7 @@ a.row, button.row { width: 100%; text-align: left; background: none; border-left
 
 /* ----------------------------------------------------------------- sheet */
 #sheet-root:empty { display: none; }
-#sheet-root { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; background: rgba(17, 26, 21, .6); }
+#sheet-root { position: fixed; inset: 0 0 var(--host-inset, 0px) 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; background: rgba(17, 26, 21, .6); }
 .sheet { background: var(--paper); border-radius: 12px 12px 0 0; padding: 10px var(--pad) calc(16px + env(safe-area-inset-bottom, 0px)); max-height: 90%; overflow-y: auto; width: 100%; max-width: 560px; margin: 0 auto; }
 .sheet .grip { width: 36px; height: 4px; border-radius: 2px; background: #bdbbb0; margin: 0 auto 16px; }
 .sheet h2 { font-size: 22px; font-weight: 600; margin: 6px 0 8px; }

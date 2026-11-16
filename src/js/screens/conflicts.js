@@ -49,7 +49,9 @@ export async function mount(el) {
         rows.push(html`
           <li class="row" data-conflict="${g.id}" data-kind="edit_vs_delete" data-record-id="${g.record_id}">
             <div class="row-top"><span class="label">${label} / ${g.items.map((c) => fieldLabel(c.field)).join(', ')}</span><span class="label">${hhmm(g.at)}</span></div>
-            <p class="muted small" style="margin-top:4px">Record deleted on another device. The delete wins.</p>
+            <p class="muted small" style="margin-top:4px">${g.kept_device && g.kept_device === myDevice
+              ? 'Deleted on this device after it was edited on another one. The delete wins.'
+              : 'Record deleted on another device. The delete wins.'}</p>
             ${g.items.map((c) => html`<div class="quote" data-lost>${g.lost_by === me ? 'Your edit' : `Edit by ${who(g.lost_by, g.lost_device)}`}: ${fieldLabel(c.field)} ${show(c.lost_value)}</div>`)}
             ${g.items.every((c) => c.resolved)
               ? html`<p class="small muted" style="margin-top:10px">Restored.</p>`

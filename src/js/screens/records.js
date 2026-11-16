@@ -90,7 +90,9 @@ export async function mount(el, params) {
           <span class="grow"><b>Storage almost full.</b> ${estimate.pct}% used. Sync, then free space.</span>
           <a class="btn secondary compact" href="#/storage">Open</a></div></div>` : ''}`;
 
+    // First stop for the keyboard: straight to a new record, past the whole list.
     const head = html`
+      ${editable ? html`<a class="btn compact skip" href="#/new" id="skip-new">Skip to New record</a>` : ''}
       <header class="head">
         <a class="eyebrow" href="#/regions" id="region-link">${region.name} / ${c.total} ${c.total === 1 ? 'record' : 'records'}</a>
         <h1 class="title">Observations</h1>

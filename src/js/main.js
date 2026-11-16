@@ -4,7 +4,8 @@ import { restoreUser, currentUser } from './auth.js';
 import { startAutoSync, state } from './sync.js';
 import { on } from './bus.js';
 import { paint, setBarMode } from './statusbar.js';
-import { isWide } from './html.js';
+import { isWide, closeSheet } from './html.js';
+import { watchHostInset } from './hostinset.js';
 import { isLead } from './queries.js';
 import * as signin from './screens/signin.js';
 import * as regions from './screens/regions.js';
@@ -70,7 +71,7 @@ async function route() {
   for (const h of mounted) h.destroy?.();
   mounted = [];
   current = name;
-  document.getElementById('sheet-root').innerHTML = '';
+  closeSheet();
 
   const split = isWide() && SPLIT.has(name);
   document.body.classList.toggle('split', split);
@@ -125,6 +126,7 @@ async function afterData() {
 
 async function start() {
   paint();
+  watchHostInset();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch((err) => console.warn('service worker', err));
   }
@@ -139,6 +141,7 @@ async function start() {
   if (user) startAutoSync();
   await route();
   document.documentElement.dataset.ready = '1';
+  try { sessionStorage.removeItem('fieldsync.boot'); } catch { /* storage blocked */ }
 }
 
 start();
