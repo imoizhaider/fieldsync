@@ -358,3 +358,49 @@ Former FLAKY cases A10, K04 and K08 passed on every attempt. A10 had failed when
 ### Cleanup
 
 QA rows were deleted with `node tests/qa/run.mjs --cleanup-only` after the live run (proof in `artifacts/qa/cleanup.json`), then `npm run seed` reset the demo data and the three demo accounts.
+
+## 9. Online sign-out (P0, reported by the owner, 16 November 2026)
+
+Symptom: the app signed the user out by itself while online. It breaks FR-1 (PRD line 52) and the reliability requirement (line 133). A06 covered only a session that ends while offline, so this was never caught. Full log: `tests/qa/FIXES.md`, section "Online sign-out". Decisions 56 to 63 are in `DECISIONS.md`.
+
+**Cause.** `npm run seed`, which every `npm run verify` also runs, set the demo accounts' password through the admin API on every run. Supabase Auth deletes every session of a user whenever an admin sets its password, even when the new password is the same as the old one. Up to an hour later the device's access token ran out, and the refresh answered 400 `refresh_token_not_found`. The app then showed "sign-in needed" with no way back except Sign out.
+
+**Evidence.**
+- `artifacts/fix/signout/probe.json`: sessions went from 2 to 0 after the same-password update, the refresh answered 400, and a control user whose password was not touched still got 200.
+- `artifacts/fix/signout/audit.json`: the demo accounts had 0 live sessions after the earlier seeds, and 8 live sessions after two verify runs with the fix.
+
+**Also fixed.** A refresh that failed with a 503 or timed out was shown as "sign-in needed".
+
+**Ruled out by evidence.**
+- S1, rotation between two devices: the probe and M02 show both devices refresh fine.
+- S2, a 401/403 from a data call treated as a sign-out: ruled out by M04.
+- S3, free space or caches removing the session: ruled out by M05.
+- S4, two auth clients: there is only one `createClient`.
+- S5, reusing a replaced token: the probe got 200, and M06 passes.
+
+**Fix.**
+- The seed sets a password only when the current one no longer works (`scripts/lib/accounts.mjs`).
+- A refresh that fails for a network or server reason is now a sync failure, and the backoff retries it.
+- When the server has really ended the session, the user stays in the app. The status bar says "Online / sign-in needed to sync", and the Sync screen has a **Sign in again** button that opens the sign-in form with the email filled in. The outbox uploads right after signing in again.
+- `supabase/schema.sql` was not changed.
+
+### New category M (`tests/qa/specs/m-session.spec.js`, rows in `tests/qa/PLAN.md`)
+
+| Case | Sev | Before the fix (localhost) | After (localhost) | After (live, build `ce2827e3bbf6`) |
+| --- | --- | --- | --- | --- |
+| M01 online refresh | P0 | PASS | PASS | PASS |
+| M02 two tabs + second device | P0 | PASS | PASS | FLAKY: 1st attempt saw the laptop's record arrive on the phone while the phone was saving (a test race, not the app); test fixed afterwards, not yet re-run live |
+| M03 refresh 400 | P0 | FAIL (no way to sign in again) | PASS | PASS |
+| M04 RPC 401/403, real rejection | P0 | PASS | PASS | PASS |
+| M05 free space, caches | P1 | PASS | PASS | PASS |
+| M06 long idle gap | P0 | PASS | PASS | PASS |
+| M07 server ended the sessions | P0 | FAIL (no way to sign in again) | PASS | PASS |
+| M08 offline past expiry | P0 | PASS | PASS | PASS |
+| M09 seed account step | P0 | FAIL (sessions 1 -> 0) | PASS | PASS |
+| M10 refresh 503 for 45 s | P1 | FAIL (bar "sign-in needed") | PASS | PASS |
+
+The fix was checked in four ways:
+- **Local regression**, one spec at a time: every case passed. A, B, C, D, E, F, G, H, J, L, K01–K07 and M all passed; I passed 14/15, because I15 checks the host's headers and so passes only on the live site.
+- **`npm run verify`**, run twice in a row: 12/12 gates and 6/6 other named tests passed both times.
+- **Live QA on the new build:** M passed (M02 flaky), A 10/10, B 16/16, C 9/9, D 8/8, E 8/8 (E06 still BLOCKED), F 13/13.
+- **Not run live:** the run was stopped during G because the machine ran low on memory. So G, H, I, J, K and L have not been run against this build. They passed on the previous build, and on this build locally.

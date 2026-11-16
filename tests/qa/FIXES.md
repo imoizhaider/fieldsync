@@ -78,6 +78,10 @@ Runs, localhost, one spec at a time (`artifacts/fix/signout/before-m*.log`, `aft
 
 Regression after the fix, localhost, one spec at a time: A 10/10, B 16/16, C 9/9, D 8/8, E 8/8, F 13/13, G 9/9, H 5/5, I 14/15 (I15 host headers, live only), J 4/4, K01-K07 7/7, L 5/5, M 10/10. Two order effects, no test changed: L01 counts the members of the main QA region, and the first M run had put its users there (M users now get their own region `QA-<ts>-M`); I01 failed after K01 had added B to its empty helper region `QA-<ts>-E` (removed, I01 passed, same as in the first fix round). `npm run verify` twice in a row: 12/12 and 6/6 both times (136 s, 133 s).
 
+Live, build `ce2827e3bbf6` (`artifacts/fix/signout/live-*.log`): M 10/10 (M02 FLAKY: first attempt saw the laptop's record arrive on the phone during the phone's save, a race in the test; the test now waits for it first, not yet re-run live), A 10/10, B 16/16, C 9/9, D 8/8, E 8/8 (E06 BLOCKED as before), F 13/13. The run was stopped by Claude Code during G because the machine was low on memory (the owner's own Chrome held about 8 GB); G, H, I, J, K and L still need a live run on this build.
+
+Next action: when memory allows, run on the live site, one spec at a time: M02 (`sh artifacts/fix/signout/live.sh m-session.spec.js m2 "M02 "`), then g, h, i, j, l, k (`"K0[1-79] "`), k08 (`"K08 "`); then `node tests/qa/run.mjs --cleanup-only` and `npm run seed`.
+
 ## Done
 
 1. QA rows cleaned, `npm run verify` passed twice in a row (12/12, 6/6).

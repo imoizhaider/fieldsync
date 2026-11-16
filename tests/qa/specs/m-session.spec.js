@@ -184,6 +184,11 @@ test('M02 [P0] one account in two tabs and on a second device, past a refresh: a
   ]);
   await Promise.all([laptop.page, tab2, phone.page].map((p) => p.locator('#sync-now').click()));
   const a = await laptop.createRecord({ title: uniq('M02 laptop'), fields: { ph: 6.3 } });
+  // Same account: the laptop's record reaches the phone too. Let it arrive first,
+  // so the phone's own new record is the only new row when it saves.
+  await waitSql('select id from public.records where id = $1', [a], (r) => r.length === 1);
+  await phone.syncNow();
+  await expect.poll(async () => Boolean(await phone.localRecord(a)), { timeout: 30_000 }).toBe(true);
   const b = await phone.createRecord({ title: uniq('M02 phone'), fields: { ph: 6.4 } });
   await waitSql('select id from public.records where id = any($1)', [[a, b]], (r) => r.length === 2);
   await laptop.waitSynced();
