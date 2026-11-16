@@ -29,6 +29,27 @@ export const TYPES = {
   },
 };
 
+// Allowed range of a reading. The server checks the same range in sync_push.
+export const RANGES = { ph: { min: 0, max: 14 } };
+
+// Turn what was typed into a reading field into a value, or say why not.
+// Returns { value } or { error }. Empty is allowed (value null); a decimal
+// comma is read as a decimal point.
+export function parseReading(reading, typed) {
+  const s = String(typed ?? '').trim();
+  if (s === '') return { value: null };
+  if (reading.kind !== 'number') return { value: s };
+  const n = Number(s.replace(',', '.'));
+  const range = RANGES[reading.key];
+  if (!Number.isFinite(n)) {
+    return { error: `${reading.label} must be a number${range ? ` from ${range.min} to ${range.max}` : ''}.` };
+  }
+  if (range && (n < range.min || n > range.max)) {
+    return { error: `${reading.label} must be from ${range.min} to ${range.max}.` };
+  }
+  return { value: n };
+}
+
 export function fieldLabel(key) {
   if (key === 'title') return 'title';
   if (key === 'notes') return 'notes';
@@ -156,7 +177,10 @@ export function recordTitle(record) {
 
 function csvCell(v) {
   if (v === null || v === undefined) return '';
-  const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  // Text that a spreadsheet would run as a formula is written as plain text
+  // (leading apostrophe). Real numbers such as -2.5 are left alone.
+  if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

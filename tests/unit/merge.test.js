@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   diffFields, mergeServerRecord, recordStatus, backoffDelay, formatLabel, fitWithin,
-  trackDistance, haversine, summaryLine, recordTitle, toCsv, sameValue,
+  trackDistance, haversine, summaryLine, recordTitle, toCsv, sameValue, parseReading,
 } from '../../src/js/merge.js';
 
 const server = (over = {}) => ({
@@ -138,4 +138,32 @@ test('CSV export quotes commas, quotes and line breaks', () => {
   const [header, ...rest] = csv.split('\r\n');
   assert.equal(header.split(',').length, 22);
   assert.ok(rest.join('\r\n').startsWith('SOIL-014,r1,soil,"North, transect",6.8,,,,,,,,"said ""wet""\nsecond line",24.8607,67.0011,4,3,o,u,Researcher B,3,no'));
+});
+
+test('a reading must be a number, and pH must be on the pH scale', () => {
+  const ph = { key: 'ph', label: 'pH', kind: 'number' };
+  const moisture = { key: 'moisture', label: 'Moisture', kind: 'number' };
+  const species = { key: 'species', label: 'Species', kind: 'text' };
+  assert.deepEqual(parseReading(ph, ''), { value: null });
+  assert.deepEqual(parseReading(ph, ' 6,8 '), { value: 6.8 });
+  assert.deepEqual(parseReading(ph, '0'), { value: 0 });
+  assert.deepEqual(parseReading(ph, '14'), { value: 14 });
+  for (const bad of ['abc', '-3', '99', '1e9', '14.01', 'Infinity', '6.5.1']) {
+    assert.ok(parseReading(ph, bad).error, `pH ${bad} must be refused`);
+    assert.equal(parseReading(ph, bad).value, undefined);
+  }
+  assert.ok(parseReading(moisture, 'wet').error);
+  assert.deepEqual(parseReading(moisture, '-2.5'), { value: -2.5 });
+  assert.deepEqual(parseReading(species, 'Grey heron'), { value: 'Grey heron' });
+});
+
+test('CSV export writes formula-like text as plain text and leaves numbers alone', () => {
+  const csv = toCsv([{
+    id: 'r1', type: 'soil', seq: 1, version: 1, deleted: 0, updatedBy: 'u1', observedAt: 'o', updatedAt: 'u',
+    fields: { title: '=HYPERLINK("http://example.org","x")', temperature: -2.5, notes: '+1+1 @SUM(A1)' },
+  }]);
+  const row = csv.split('\r\n')[1];
+  assert.ok(row.includes(',"\'=HYPERLINK(""http://example.org"",""x"")",'));
+  assert.ok(row.includes(',-2.5,'));
+  assert.ok(row.includes(",'+1+1 @SUM(A1),"));
 });

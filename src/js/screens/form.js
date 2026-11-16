@@ -2,7 +2,7 @@
 import { html, render, coords, go, isWide, pad2 } from '../html.js';
 import { db } from '../db.js';
 import { currentRegion, regions, canEdit } from '../queries.js';
-import { TYPES, formatLabel } from '../merge.js';
+import { TYPES, formatLabel, parseReading } from '../merge.js';
 import { createRecord, updateRecord, proposedSeq } from '../store.js';
 import { compressPhoto, getPoint, permissionState, PHOTO_MAX_SIDE } from '../device.js';
 
@@ -15,7 +15,7 @@ async function newDraft() {
   return {
     mode: 'new', id: null, regionId: region?.id ?? null, regionName: region?.name ?? '', editable: canEdit(region),
     type: 'soil', fields: {}, original: {}, photos: [], existing: [], removed: [],
-    gps: null, gpsState: 'idle', gpsChanged: false, camera: 'prompt', view: 'form', seq: null, busy: false, error: null,
+    gps: null, gpsState: 'idle', gpsChanged: false, camera: 'prompt', view: 'form', seq: null, busy: false, error: null, invalid: {},
   };
 }
 
@@ -30,22 +30,23 @@ async function editDraft(id) {
     type: rec.type, fields: { ...rec.fields }, original: { ...rec.fields }, photos: [],
     existing: media.map((m) => ({ id: m.id, blob: m.blob })), removed: [],
     gps: gps?.points?.[0] ?? null, gpsState: gps?.points?.[0] ? 'fixed' : 'none', gpsChanged: false,
-    camera: 'prompt', view: 'form', seq: rec.seq, busy: false, error: null,
+    camera: 'prompt', view: 'form', seq: rec.seq, busy: false, error: null, invalid: {},
   };
 }
 
+// Reads the form. A reading that is not a number, or is outside its range, is
+// never saved: it comes back in `invalid` (field key -> message) instead.
 function collectFields(d) {
-  const out = d.mode === 'edit' ? { ...d.original } : {};
-  const clean = (v, kind) => {
-    const s = String(v ?? '').trim();
-    if (s === '') return null;
-    if (kind === 'number') { const n = Number(s.replace(',', '.')); return Number.isFinite(n) ? n : s; }
-    return s;
-  };
-  out.title = clean(d.fields.title, 'text');
-  out.notes = clean(d.fields.notes, 'text');
-  for (const r of TYPES[d.type].readings) out[r.key] = clean(d.fields[r.key], r.kind);
-  return out;
+  const fields = d.mode === 'edit' ? { ...d.original } : {};
+  const invalid = {};
+  const text = (v) => String(v ?? '').trim() || null;
+  fields.title = text(d.fields.title);
+  fields.notes = text(d.fields.notes);
+  for (const r of TYPES[d.type].readings) {
+    const parsed = parseReading(r, d.fields[r.key]);
+    if (parsed.error) invalid[r.key] = parsed.error; else fields[r.key] = parsed.value;
+  }
+  return { fields, invalid };
 }
 
 export async function mount(el, params) {
@@ -169,11 +170,14 @@ export async function mount(el, params) {
             <input name="title" data-field="title" value="${d.fields.title ?? ''}" placeholder="${def.noun.charAt(0).toUpperCase() + def.noun.slice(1)}, north transect" maxlength="80"></label>
           <div class="grid2">
             ${def.readings.map((r) => html`
-              <label class="field"><span class="label">${r.label}</span>
+              <label class="field ${d.invalid[r.key] ? 'invalid' : ''}"><span class="label">${r.label}</span>
                 <input class="reading" name="${r.key}" data-field="${r.key}" value="${d.fields[r.key] ?? ''}"
-                  ${r.kind === 'number' ? html`inputmode="decimal"` : ''} maxlength="40">
+                  ${r.kind === 'number' ? html`inputmode="decimal"` : ''} maxlength="40"
+                  ${d.invalid[r.key] ? html`aria-invalid="true" aria-describedby="field-errors"` : ''}>
                 ${r.unit ? html`<span class="unit">${r.unit}</span>` : ''}</label>`)}
           </div>
+          ${Object.keys(d.invalid).length > 0 ? html`<div class="notice outline-bad small" role="alert" id="field-errors">
+            <b>Not saved.</b> ${Object.values(d.invalid).join(' ')}</div>` : ''}
           <label class="field"><span class="label">Notes</span>
             <textarea name="notes" data-field="notes" rows="3" maxlength="2000">${d.fields.notes ?? ''}</textarea></label>
           <div>
@@ -209,9 +213,16 @@ export async function mount(el, params) {
 
   async function save() {
     if (d.busy || !d.editable) return;
+    const { fields, invalid } = collectFields(d);
+    d.invalid = invalid;
+    const firstBad = Object.keys(invalid)[0];
+    if (firstBad) {
+      paint();
+      el.querySelector(`#record-form [data-field="${firstBad}"]`)?.focus();
+      return;
+    }
     d.busy = true;
     try {
-      const fields = collectFields(d);
       let id = d.id;
       if (d.mode === 'new') {
         id = await createRecord({ regionId: d.regionId, type: d.type, fields, photos: d.photos, gps: d.gps });
@@ -239,6 +250,7 @@ export async function mount(el, params) {
     const typeBtn = ev.target.closest('[data-type]');
     if (typeBtn && d.mode === 'new') {
       d.type = typeBtn.dataset.type;
+      d.invalid = {};
       d.seq = d.regionId ? await proposedSeq(d.regionId, d.type) : null;
       paint();
       return;

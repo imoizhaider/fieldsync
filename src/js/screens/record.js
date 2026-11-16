@@ -90,7 +90,7 @@ export async function mount(el, params) {
       <div class="section-label">Photos / ${media.length}</div>
       <div class="photos" id="photos">${tiles}${media.length === 0 ? html`<span class="muted small">No photos</span>` : ''}</div>
       <div class="pad" style="padding-top:14px">
-        <p data-field="notes">${rec.fields?.notes ? rec.fields.notes : html`<span class="muted">No notes</span>`}</p>
+        <p class="notes-text" data-field="notes">${rec.fields?.notes ? rec.fields.notes : html`<span class="muted">No notes</span>`}</p>
         <p class="small" style="margin-top:8px" id="gps-line">${point ? html`${coords(point)} <span class="muted">+/- ${point.acc} m</span>` : html`<span class="muted">No GPS point</span>`}</p>
       </div>
       <div class="section-label ink" style="margin-top:14px">History</div>
