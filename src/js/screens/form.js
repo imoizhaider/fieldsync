@@ -167,7 +167,7 @@ export async function mount(el, params) {
               <button type="button" data-type="${key}" aria-pressed="${d.type === key}" ${d.mode === 'edit' ? 'disabled' : ''}>${t.label}</button>`)}
           </div>
           <label class="field"><span class="label">Title</span>
-            <input name="title" data-field="title" value="${d.fields.title ?? ''}" placeholder="${def.noun.charAt(0).toUpperCase() + def.noun.slice(1)}, north transect" maxlength="80"></label>
+            <input name="title" data-field="title" dir="auto" value="${d.fields.title ?? ''}" placeholder="${def.noun.charAt(0).toUpperCase() + def.noun.slice(1)}, north transect" maxlength="80"></label>
           <div class="grid2">
             ${def.readings.map((r) => html`
               <label class="field ${d.invalid[r.key] ? 'invalid' : ''}"><span class="label">${r.label}</span>
@@ -179,7 +179,7 @@ export async function mount(el, params) {
           ${Object.keys(d.invalid).length > 0 ? html`<div class="notice outline-bad small" role="alert" id="field-errors">
             <b>Not saved.</b> ${Object.values(d.invalid).join(' ')}</div>` : ''}
           <label class="field"><span class="label">Notes</span>
-            <textarea name="notes" data-field="notes" rows="3" maxlength="2000">${d.fields.notes ?? ''}</textarea></label>
+            <textarea name="notes" data-field="notes" dir="auto" rows="3" maxlength="2000">${d.fields.notes ?? ''}</textarea></label>
           <div>
             <div class="section-label" style="padding:0 0 8px"><span id="photo-count">Photos / ${total}</span><span>Compressed to ${PHOTO_MAX_SIDE} px</span></div>
             <div class="photos" style="padding:0">${tiles}

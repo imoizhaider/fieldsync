@@ -90,7 +90,7 @@ export async function mount(el, params) {
       <div class="section-label">Photos / ${media.length}</div>
       <div class="photos" id="photos">${tiles}${media.length === 0 ? html`<span class="muted small">No photos</span>` : ''}</div>
       <div class="pad" style="padding-top:14px">
-        <p class="notes-text" data-field="notes">${rec.fields?.notes ? rec.fields.notes : html`<span class="muted">No notes</span>`}</p>
+        <p class="notes-text" data-field="notes" dir="auto">${rec.fields?.notes ? rec.fields.notes : html`<span class="muted">No notes</span>`}</p>
         <p class="small" style="margin-top:8px" id="gps-line">${point ? html`${coords(point)} <span class="muted">+/- ${point.acc} m</span>` : html`<span class="muted">No GPS point</span>`}</p>
       </div>
       <div class="section-label ink" style="margin-top:14px">History</div>
@@ -101,7 +101,7 @@ export async function mount(el, params) {
         <div class="scroll" style="padding-bottom:24px">
           <div class="detail-head">
             <div class="grow"><div class="eyebrow">${label} / ${regionLabel}</div>
-              <h1 class="title" id="record-title">${recordTitle(rec)}</h1></div>
+              <h1 class="title" id="record-title" dir="auto">${recordTitle(rec)}</h1></div>
             ${statusEl}
             ${editable ? html`<a class="btn secondary compact" href="#/edit/${id}" id="edit-record">Edit</a>
               <button class="btn danger compact" data-act="delete" id="delete-record">Delete</button>` : ''}
@@ -112,7 +112,7 @@ export async function mount(el, params) {
       render(el, html`
         <header class="head-back">
           <a class="back" href="#/records" aria-label="Back">&larr;</a>
-          <div class="grow"><h1 id="record-title">${recordTitle(rec)}</h1><span class="eyebrow">${label} / ${regionLabel}</span></div>
+          <div class="grow"><h1 id="record-title" dir="auto">${recordTitle(rec)}</h1><span class="eyebrow">${label} / ${regionLabel}</span></div>
         </header>
         <div class="scroll" style="padding-bottom:16px">
           <div class="pad" style="padding:12px 16px">${statusEl}</div>

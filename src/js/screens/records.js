@@ -47,7 +47,7 @@ function rowTemplate(row, selectedId) {
   return html`
     <li><a class="row ${r.id === selectedId ? 'selected' : ''}" href="#/record/${r.id}" data-record-id="${r.id}" data-status="${status}">
       <div class="row-top"><span class="label">${formatLabel(r.type, r.seq)}</span><span class="label">${hhmm(r.observedAt)}</span></div>
-      <div class="row-title">${recordTitle(r)}</div>
+      <div class="row-title" dir="auto">${recordTitle(r)}</div>
       <div class="row-bottom"><span class="row-meta">${meta}</span>
         <span class="status ${status}" title="${STATUS_TITLE[status] ?? STATUS_TEXT[status]}">${STATUS_TEXT[status]}</span></div>
       ${bar === null ? '' : html`<div class="bar"><i style="width:${bar}%"></i></div>`}
