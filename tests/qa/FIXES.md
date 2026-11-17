@@ -80,7 +80,25 @@ Regression after the fix, localhost, one spec at a time: A 10/10, B 16/16, C 9/9
 
 Live, build `ce2827e3bbf6` (`artifacts/fix/signout/live-*.log`): M 10/10 (M02 FLAKY: first attempt saw the laptop's record arrive on the phone during the phone's save, a race in the test; the test now waits for it first, not yet re-run live), A 10/10, B 16/16, C 9/9, D 8/8, E 8/8 (E06 BLOCKED as before), F 13/13. The run was stopped by Claude Code during G because the machine was low on memory (the owner's own Chrome held about 8 GB); G, H, I, J, K and L still need a live run on this build.
 
-Next action: when memory allows, run on the live site, one spec at a time: M02 (`sh artifacts/fix/signout/live.sh m-session.spec.js m2 "M02 "`), then g, h, i, j, l, k (`"K0[1-79] "`), k08 (`"K08 "`); then `node tests/qa/run.mjs --cleanup-only` and `npm run seed`.
+Next action (round 1): superseded by round 2 below, which re-ran everything on the live site.
+
+## Round 2 (17 November 2026): sign-in asked after the network goes off, and UI
+
+Owner's report: as soon as the network goes off and comes back, the bar says "Online / sign-in needed to sync" and only the password brings sync back. Evidence: `artifacts/fix/signout2/README.md`. UI: `artifacts/fix/ui/README.md`.
+
+**Cause (M-1):** the server never ended the session. supabase-js (auth-js 2.119) deletes the stored session after a refresh fails with any answer it does not class as a network error once the access token has expired (429, the server's 400 `bad_json` for a request cut off by a dropped connection, a non-JSON 4xx). The app had no copy, so "sign-in needed" stayed until the password was typed. Also: auth-js's 60 s failure cooldown was not reset on reconnect, so sync stood still up to a minute. Not involved: rotation with a lost answer (R2), two places (R4), the service worker (R5), the CDN or HTTP cache (U-4).
+
+| Bug | Sev | Status | Before | After (local) | After (live) |
+| --- | --- | --- | --- | --- | --- |
+| M-1 session lost after offline/online | P0 | FIXED | M11, M12, M13, M14, M15, M17 FAIL for the targeted reason (`signout2/before-m*.log`); V10/V11 reproduce the owner's screen | M 17/17 (`signout2/after-m-2.log`) | see below |
+| U-4 CDN or cache | P2 | NOT A BUG | evidence `ui/u4-cache-before.json`: every file `max-age=0` or `no-cache`, live = local build | | |
+| U-1 bottom of the screen | P2 | FIXED | tab bar under New record and Record detail on a phone, photo row under the Save bar at 375x667 (`ui/before/`) | `ui/after/`; C10 PASS | |
+| U-2 Add photo on a phone | P2 | FIXED | C10 FAIL (tab bar under the form) | C10 PASS, C05 PASS | |
+| U-3 saved track cannot be viewed | P2 | FIXED | D09 FAIL (no track screen) | D09 PASS, D08 PASS | |
+
+The first after-run of M (`after-m-1.log`) found two defects in the fix itself, both corrected before the final run: the Sync screen showed the retry countdown instead of "Sign-in needed" (M03, M07), and the server's `validation_failed` answer for an unreadable token was not treated as a refusal (M14).
+
+No test was weakened, skipped or deleted. D08 now opens the saved track and presses its Delete button to reach the same confirmation sheet (the old sheet no longer exists); every assertion is unchanged.
 
 ## Done
 

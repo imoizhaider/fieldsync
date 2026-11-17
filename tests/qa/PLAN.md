@@ -64,6 +64,7 @@ Assumptions where the PRD is silent (closest reading, also noted in the report)
 | C07 | P2 | Photo on a record that is later deleted | Record and its photos disappear on both devices; Storage/media rows not left "live" |
 | C08 | P1 | Photo made on device A seen on device B | B downloads and shows it |
 | C09 | P2 | Free space, then reopen record online | Local blob removed, then fetched again |
+| C10 | P1 | Add photo on a phone (390x844 and 375x667, touch) | No tab bar under the form; Save and Add photo on screen and not covered, Add at least 44 px and named "Add photo"; one tap opens the picker (images, no `capture`, multiple); 2 photos added, record and photos reach the server |
 
 ## D. GPS
 
@@ -76,7 +77,8 @@ Assumptions where the PRD is silent (closest reading, also noted in the report)
 | D05 | P0 | Track while going offline | Track saved offline as Pending, uploads on reconnect |
 | D06 | P2 | Edge coordinates (90,180), (-90,-180), (0,0) | Stored exactly, displayed correctly |
 | D07 | P1 | Reload in the middle of a recording | Track recovered and queued, at most the documented 4 points lost |
-| D08 | P2 | Delete a synced track | Flagged deleted on server, gone on second device |
+| D08 | P2 | Delete a synced track (from the saved track screen) | Flagged deleted on server, gone on second device |
+| D09 | P1 | Open a saved track from Tracks, on the recording device, on a second device, and offline | Track screen with name, 6 points, KM equal to the stored distance, duration, start time, 6 point rows, 6 plotted points; back arrow returns to Tracks |
 
 ## E. Offline and PWA
 
@@ -203,3 +205,10 @@ A06 only covered a session that ends while offline. Each M case uses its own thr
 | M08 | P0 | Offline past a token expiry, then back online | No sign-in, the pending record uploads by itself |
 | M09 | P0 | The seed's account step (`scripts/lib/accounts.mjs`) on an account with signed-in devices | No session ended, device keeps syncing; a password that no longer works is still set |
 | M10 | P1 | Token endpoint answers 503 for 45 s (longer than auth-js's own 30 s retry) | Bar never says sign-in; upload continues once the endpoint is back |
+| M11 | P0 | Offline past the token lifetime (expired an hour ago), auth-js's failed retries over, then online | No sign-in; refresh answers 200 after the reconnect; the pending record reaches Postgres within 30 s |
+| M12 | P0 | The network drops during a refresh: one answer lost, then a request body cut off (server answers 400 `bad_json`) | Session still stored; record syncs within 60 s; never a sign-in |
+| M13 | P0 | Five offline/online cycles, each past a token expiry with failed refreshes | Each cycle: "Offline / 1 pending", then the record uploads within 30 s and the bar says "Online / all synced" |
+| M14 | P1 | The server refuses one refresh (`refresh_token_not_found`), later accepts one | Bar shows "sign-in needed", then clears by itself (no password) and the record syncs |
+| M15 | P0 | Three records made offline (one with a photo, one wildlife), refresh failing | Outbox unchanged while failing; all three and the photo upload by themselves within 30 s of the reconnect |
+| M16 | P1 | Service worker and auth | No `/auth/v1/` request made by or answered from the worker; Cache Storage holds no auth entry and nothing from another origin |
+| M17 | P0 | One refresh answered 429, 400 `bad_json` or an HTML 403 (three runs) | Session still stored, record syncs within 150 s, never a sign-in |
