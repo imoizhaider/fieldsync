@@ -13,6 +13,7 @@ import * as records from './screens/records.js';
 import * as record from './screens/record.js';
 import * as form from './screens/form.js';
 import * as tracks from './screens/tracks.js';
+import * as track from './screens/track.js';
 import * as syncScreen from './screens/syncscreen.js';
 import * as conflicts from './screens/conflicts.js';
 import * as storage from './screens/storage.js';
@@ -21,15 +22,19 @@ import * as consoleScreen from './screens/console.js';
 import * as styleguide from './screens/styleguide.js';
 
 const ROUTES = {
-  signin, regions, records, record, new: form, edit: form, permissions: form, tracks,
+  signin, regions, records, record, new: form, edit: form, permissions: form, tracks, track,
   sync: syncScreen, conflicts, storage, install, console: consoleScreen, styleguide,
 };
 const SPLIT = new Set(['records', 'record', 'new', 'edit', 'permissions']);
 const NAV = {
   records: 'records', record: 'records', new: 'records', edit: 'records', permissions: 'records',
-  regions: 'records', conflicts: 'records', storage: 'records', tracks: 'tracks', sync: 'sync',
+  regions: 'records', conflicts: 'records', storage: 'records', tracks: 'tracks', track: 'tracks', sync: 'sync',
 };
 const NO_NAV = new Set(['signin', 'console', 'install', 'styleguide']);
+// Screens with their own back arrow and bottom actions (designs New record, Record
+// detail): on a phone they have no tab bar under them. On wider screens the tab
+// bar is a side rail and stays.
+const NO_TABBAR = new Set(['record', 'new', 'edit', 'permissions', 'track']);
 
 let mounted = [];
 let token = 0;
@@ -76,6 +81,7 @@ async function route() {
   const split = isWide() && SPLIT.has(name);
   document.body.classList.toggle('split', split);
   document.body.classList.toggle('no-nav', NO_NAV.has(name) || !user);
+  document.body.classList.toggle('tabless', NO_TABBAR.has(name));
   document.body.dataset.route = name;
   setBarMode(name === 'signin' ? 'signin' : name === 'console' ? 'lead' : name === 'install' ? 'install' : 'app');
   for (const a of document.querySelectorAll('#nav a')) {

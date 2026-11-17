@@ -1,9 +1,9 @@
 // GPS tracks: record a walk as a list of points, plotted with no basemap.
-import { html, render, clock, openSheet } from '../html.js';
+import { html, render, clock, go } from '../html.js';
 import { db, uuid } from '../db.js';
 import { currentRegion, canEdit } from '../queries.js';
 import { formatLabel, trackDistance } from '../merge.js';
-import { saveTrackDraft, finishTrack, deleteTrack } from '../store.js';
+import { saveTrackDraft, finishTrack } from '../store.js';
 import { watchPoints } from '../device.js';
 import { emit, on } from '../bus.js';
 
@@ -52,7 +52,7 @@ function reset() {
   Object.assign(rec, { status: 'idle', id: null, points: [], startedAt: null, elapsed: 0, resumedAt: null, stop: null, error: null, seq: null, unsaved: 0, name: '' });
 }
 
-function plot(points) {
+export function plot(points) {
   const W = 300; const H = 150; const P = 18;
   const grid = html`<path d="M75 0V150M150 0V150M225 0V150M0 50H300M0 100H300" stroke="#d6d4ca" stroke-width="1" fill="none"/>`;
   if (points.length === 0) return html`<svg class="plot" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="No points yet">${grid}</svg>`;
@@ -133,20 +133,9 @@ export async function mount(el) {
   }
 
   el.addEventListener('click', async (ev) => {
+    // A saved track opens on its own screen: trace, distance, time and its points.
     const trackBtn = ev.target.closest('[data-track]');
-    if (trackBtn) {
-      const g = await db.gpsLogs.get(trackBtn.dataset.track);
-      if (!g) return;
-      openSheet(html`
-        <div class="eyebrow">${formatLabel('track', g.seq)}</div>
-        <h2>${g.name || 'Track'}</h2>
-        <p class="muted">${g.points?.length ?? 0} points / ${((g.distanceM ?? 0) / 1000).toFixed(2)} KM</p>
-        <div class="actions"><button class="btn secondary" data-act="keep">Close</button>
-          <button class="btn danger" data-act="remove">Delete track</button></div>`, {
-        remove: async (close) => { await deleteTrack(g.id); close(); },
-      });
-      return;
-    }
+    if (trackBtn) { go(`#/track/${trackBtn.dataset.track}`); return; }
     const act = ev.target.closest('[data-act]')?.dataset.act;
     if (act === 'start') {
       const region = await currentRegion();

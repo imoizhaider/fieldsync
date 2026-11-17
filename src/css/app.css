@@ -86,6 +86,23 @@ a { color: inherit; text-decoration: none; }
 }
 #nav a[aria-current="page"] { color: var(--accent); font-weight: 600; border-top-color: var(--accent); }
 body.no-nav #nav { display: none; }
+/* Phone: detail and form screens end with their own actions (Save, Edit /
+   Delete), as in the New record and Record detail designs. No tab bar under
+   them, and the actions keep clear of the iPhone home indicator (the tab bar
+   used to carry that inset for them). */
+@media (max-width: 767px) {
+  body.tabless #nav { display: none; }
+  body.tabless .foot { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+/* Short phones (Safari on a 667 px iPhone with its toolbars): the fixed bottom
+   bars give their height back to the screen, so the form's photo row and the
+   lists are not squeezed into a strip. */
+@media (max-width: 767px) and (max-height: 700px) {
+  .foot { padding-top: 8px; padding-bottom: 8px; gap: 6px; }
+  body.tabless .foot { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .foot-note { display: none; }
+  #nav a { min-height: 48px; }
+}
 
 /* ------------------------------------------------------------------ type */
 .eyebrow { font-size: 12px; font-weight: 500; color: var(--muted); }
@@ -240,6 +257,15 @@ a.row, button.row { width: 100%; text-align: left; background: none; border-left
 .recorder .caption { background: #e9e6dc; padding: 0 16px 8px; font-size: 12px; color: var(--muted); }
 .recorder .stats { border-top: 1px solid var(--rule); border-bottom: 0; }
 .recorder .stats .num { color: var(--ink); }
+/* A saved track (#/track/<id>). */
+.track-times { display: grid; grid-template-columns: 1fr 1fr; margin: 14px var(--pad) 0; border: 1px solid var(--rule); border-radius: var(--radius); }
+.track-times > div { padding: 10px 14px; }
+.track-times > div + div { border-left: 1px solid var(--rule); }
+.track-times dt { font-size: 12px; color: var(--muted); }
+.track-times dd { margin: 2px 0 0; font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.point-list { list-style: none; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
+.point-list li { display: grid; grid-template-columns: 2.5em 3.2em 1fr auto; gap: 8px; align-items: baseline; padding: 10px var(--pad); border-bottom: 1px solid var(--rule); font-size: 13px; }
+.point-list .n, .point-list .t, .point-list .acc { color: var(--muted); }
 
 /* ------------------------------------------------------------- conflicts */
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }

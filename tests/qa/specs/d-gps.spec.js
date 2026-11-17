@@ -292,6 +292,8 @@ test('D08 [P2] deleting a synced track reaches the server and the other device',
   await expect(b.page.locator(`[data-track="${track.id}"]`)).toHaveCount(1);
   await a.go('#/tracks');
   await a.page.click(`[data-track="${track.id}"]`);
+  // The row opens the saved track (U-3); its Delete button asks for confirmation.
+  await a.page.click('#track-delete');
   await expect(a.page.locator('#sheet-root .sheet')).toContainText('4 points');
   await a.shot('track-sheet');
   await a.page.click('#sheet-root [data-act="remove"]');
@@ -303,4 +305,49 @@ test('D08 [P2] deleting a synced track reaches the server and the other device',
   await b.go('#/tracks');
   await expect(b.page.locator(`[data-track="${track.id}"]`)).toHaveCount(0);
   expect((await localTracks(b)).some((g) => g.id === track.id)).toBe(false);
+});
+
+test('D09 [P1] a saved track opens from the Tracks list and shows its points, distance and time', async ({ qa }) => {
+  const a = await qa.device('deviceA', { user: 'a', init: [geoMock] });
+  const b = await qa.device('deviceB', { user: 'b' });
+  await a.open();
+  await b.open();
+  await a.go('#/tracks');
+  const name = uniq('D09 ridge');
+  await a.page.fill('#track-name', name);
+  await a.page.click('#start-track');
+  await a.page.waitForFunction(() => window.__geo.watchers.size > 0);
+  await a.page.evaluate(() => window.__geo.emit(6, 0.0004, 0.0003));
+  await expect(a.page.locator('#track-points')).toHaveText('6');
+  await a.page.click('#stop-track');
+  await a.waitSynced();
+  const track = (await localTracks(a)).find((g) => g.name === name);
+  const km = ((track.distanceM ?? 0) / 1000).toFixed(2);
+  expect(Number(km), 'the walk has a distance').toBeGreaterThan(0);
+
+  // On the device that recorded it, and on another device after a sync.
+  await b.syncNow();
+  for (const d of [a, b]) {
+    await d.go('#/tracks');
+    const row = d.page.locator(`[data-track="${track.id}"]`);
+    await expect(row, `${d.name}: track in the list`).toHaveCount(1);
+    await row.click();
+    await d.page.waitForFunction(() => document.body.dataset.route === 'track');
+    await expect(d.page.locator('#track-title')).toHaveText(name);
+    await expect(d.page.locator('#track-points')).toHaveText('6');
+    await expect(d.page.locator('#track-km')).toHaveText(km);
+    await expect(d.page.locator('#track-duration')).toHaveText(/^\d\d:\d\d:\d\d$/);
+    await expect(d.page.locator('#track-start')).not.toHaveText('--');
+    await expect(d.page.locator('#track-points-list li'), `${d.name}: every point listed`).toHaveCount(6);
+    const plotted = await d.page.locator('#track-detail svg.plot polyline').getAttribute('points');
+    expect(plotted.trim().split(/\s+/), `${d.name}: every point plotted`).toHaveLength(6);
+    await d.shot(`${d.name}-track`);
+    // Back to the list with the back arrow.
+    await d.page.click('header a.back');
+    await d.page.waitForFunction(() => document.body.dataset.route === 'tracks');
+  }
+  // Works offline too: everything comes from the device.
+  await b.offline();
+  await b.go(`#/track/${track.id}`);
+  await expect(b.page.locator('#track-points-list li')).toHaveCount(6);
 });

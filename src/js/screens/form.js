@@ -4,7 +4,7 @@ import { db } from '../db.js';
 import { currentRegion, regions, canEdit } from '../queries.js';
 import { TYPES, formatLabel, parseReading } from '../merge.js';
 import { createRecord, updateRecord, proposedSeq } from '../store.js';
-import { compressPhoto, getPoint, permissionState, PHOTO_MAX_SIDE } from '../device.js';
+import { compressPhoto, getPoint, watchPermission, PHOTO_MAX_SIDE } from '../device.js';
 
 // The draft lives outside the screen so it survives a trip to the
 // permissions view and back.
@@ -65,6 +65,9 @@ export async function mount(el, params) {
   }
   const d = draft;
   d.view = params.name === 'permissions' ? 'permissions' : 'form';
+  // Known ahead of the tap: the photo picker has to open in the tap itself
+  // (Safari on the iPhone ignores a click() made after an await).
+  const stopWatch = watchPermission('camera', (s) => { d.camera = s; });
   if (d.mode === 'new' && d.seq === null && d.regionId) d.seq = await proposedSeq(d.regionId, d.type);
 
   function gpsBox() {
@@ -183,7 +186,7 @@ export async function mount(el, params) {
           <div>
             <div class="section-label" style="padding:0 0 8px"><span id="photo-count">Photos / ${total}</span><span>Compressed to ${PHOTO_MAX_SIDE} px</span></div>
             <div class="photos" style="padding:0">${tiles}
-              <button type="button" class="photo-add" data-act="add-photo" id="add-photo">${d.busy ? 'Saving' : 'Add'}</button></div>
+              <button type="button" class="photo-add" data-act="add-photo" id="add-photo" aria-label="Add photo">${d.busy ? 'Saving' : 'Add'}</button></div>
           </div>
           ${gpsBox()}
           ${d.error ? html`<p class="error-text small" role="alert">${d.error}</p>` : ''}
@@ -266,16 +269,18 @@ export async function mount(el, params) {
     if (act === 'gps' || act === 'gps-retry') { d.error = null; await captureGps(); return; }
     if (act === 'library') { el.querySelector('#library-input').click(); return; }
     if (act === 'add-photo' || act === 'camera-retry') {
-      d.camera = await permissionState('camera');
+      // No await before click(): see watchPermission above.
       if (d.camera === 'denied') {
         if (d.view === 'permissions') paint(); else go('#/permissions');
         return;
       }
-      el.querySelector('#camera-input').click();
+      // Add opens the phone's own photo menu (take a photo, or pick from the
+      // library, several at once). "Try again" on the Permissions view opens the camera.
+      el.querySelector(act === 'add-photo' ? '#library-input' : '#camera-input').click();
     }
   });
 
   paint();
   if (d.mode === 'new' && d.gpsState === 'idle' && d.view === 'form' && d.editable) captureGps();
-  return { destroy: () => { alive = false; for (const u of urls) URL.revokeObjectURL(u); } };
+  return { destroy: () => { alive = false; stopWatch(); for (const u of urls) URL.revokeObjectURL(u); } };
 }

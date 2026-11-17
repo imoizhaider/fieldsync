@@ -58,6 +58,21 @@ export async function permissionState(name) {
   }
 }
 
+// Calls back with the permission state now and whenever it changes. Returns a stop function.
+export function watchPermission(name, cb) {
+  let status = null;
+  let stopped = false;
+  const onChange = () => cb(status.state);
+  if (!navigator.permissions?.query) { cb('prompt'); return () => {}; }
+  navigator.permissions.query({ name }).then((s) => {
+    if (stopped) return;
+    status = s;
+    cb(s.state);
+    s.addEventListener('change', onChange);
+  }).catch(() => cb('prompt'));
+  return () => { stopped = true; status?.removeEventListener('change', onChange); };
+}
+
 export function isIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
 }

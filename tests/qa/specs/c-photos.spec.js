@@ -294,3 +294,53 @@ test('C09 [P2] free space removes local copies, reopening the record fetches the
   expect((await d.localMedia(id)).every((m) => m.blob && m.blob.size > 0)).toBe(true);
   expect(state.regions.main).toBeTruthy();
 });
+
+test('C10 [P1] on a phone the Add photo button is on screen, opens the photo picker and adds photos', async ({ qa }) => {
+  const sizes = [{ width: 390, height: 844 }, { width: 375, height: 667 }];
+  for (const viewport of sizes) {
+    const tag = `${viewport.width}x${viewport.height}`;
+    // A phone where the camera is not blocked (headless Chromium reports every
+    // unasked permission as blocked, a real phone as "prompt").
+    const d = await qa.device(`phone${tag}`, { user: 'a', viewport, hasTouch: true, isMobile: true, permissions: ['geolocation', 'camera'] });
+    await d.open();
+    await d.go('#/new');
+    await d.page.waitForSelector('#record-form');
+    const title = uniq(`C10 ${tag}`);
+    await d.page.fill('[data-field="title"]', title);
+    // The form ends with its own Save bar, as in the New record design: no tab bar under it.
+    await expect(d.page.locator('#nav'), `${tag}: no tab bar under the form`).toBeHidden();
+    const reach = (sel) => d.page.locator(sel).evaluate((el) => {
+      el.scrollIntoView({ block: 'nearest' });
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { inView: r.top >= 0 && r.bottom <= window.innerHeight, onTop: top === el || el.contains(top), w: r.width, h: r.height };
+    });
+    const save = await reach('#save-record');
+    expect(save, `${tag}: Save to device`).toMatchObject({ inView: true, onTop: true });
+    const add = await reach('#add-photo');
+    qa.note(`add ${tag}`, add);
+    expect(add, `${tag}: Add photo on screen and not covered`).toMatchObject({ inView: true, onTop: true });
+    expect(Math.min(add.w, add.h), `${tag}: Add photo is a 44 px target`).toBeGreaterThanOrEqual(44);
+    await expect(d.page.locator('#add-photo'), 'accessible name').toHaveAccessibleName(/add photo/i);
+    // One tap opens the phone's photo menu: camera or library, several photos at once.
+    const chooser = d.page.waitForEvent('filechooser', { timeout: 10_000 });
+    await d.page.locator('#add-photo').tap();
+    const fc = await chooser;
+    const input = await fc.element().evaluate((el) => ({ accept: el.accept, capture: el.getAttribute('capture'), multiple: el.multiple }));
+    qa.note(`picker ${tag}`, input);
+    expect(input.accept).toMatch(/image/);
+    expect(input.capture, `${tag}: not camera-only, the library is offered too`).toBeNull();
+    expect(input.multiple).toBe(true);
+    await fc.setFiles([photo(1), photo(2)]);
+    await expect(d.page.locator('#photo-count')).toHaveText('Photos / 2', { timeout: 60_000 });
+    await d.shot(`form-${tag}`);
+    await expect(d.page.locator('#gps-box')).toHaveAttribute('data-gps', 'fixed', { timeout: 20_000 });
+    await d.page.locator('#save-record').tap();
+    await d.page.waitForFunction(() => !document.querySelector('#record-form'));
+    const rec = (await d.idb(['records'])).records.find((r) => r.fields.title === title);
+    expect(await d.localMedia(rec.id)).toHaveLength(2);
+    await d.waitSynced();
+    expect((await serverMedia(rec.id)).filter((m) => !m.deleted)).toHaveLength(2);
+    await d.context.close();
+  }
+});
