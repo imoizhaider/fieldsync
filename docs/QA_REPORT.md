@@ -7,6 +7,8 @@ Suite: `tests/qa/` (`npm run qa`). Plan: `tests/qa/PLAN.md`. Evidence: `artifact
 No app code was changed. Nothing was pushed or deployed. `npm run verify` and `npm run seed` were not run.
 
 > **After fixes (16 November 2026):** every P0, P1 and P2 failure below is fixed and passes on the live site. New counts: PASS 111, FAIL 0, FLAKY 0, BLOCKED 1 (E06, checked across two real deploys instead). Details in section 8. Sections 1 to 7 are the original QA run and are kept as they were.
+>
+> **Round 2 (17 November 2026):** the sign-in asked after the network goes off is fixed (cause: supabase-js deleted the stored session after one non-network refresh failure; the server never ended it), plus three UI fixes. Live on build `7843417ee3bb`: 131 cases, PASS 128, FAIL 0, FLAKY 2, BLOCKED 1. Details in section 10.
 
 ## 1. Summary
 
@@ -404,3 +406,54 @@ The fix was checked in four ways:
 - **`npm run verify`**, run twice in a row: 12/12 gates and 6/6 other named tests passed both times.
 - **Live QA on the new build:** M passed (M02 flaky), A 10/10, B 16/16, C 9/9, D 8/8, E 8/8 (E06 still BLOCKED), F 13/13.
 - **Not run live:** the run was stopped during G because the machine ran low on memory. So G, H, I, J, K and L have not been run against this build. They passed on the previous build, and on this build locally.
+
+## 10. Round 2: sign-in asked after the network goes off, and UI (17 November 2026)
+
+Owner's report: as soon as the network goes off and comes back, the status bar reads "Online / sign-in needed to sync" although the device is online, and only the password brings sync back. Full evidence: `artifacts/fix/signout2/README.md` (M-1) and `artifacts/fix/ui/README.md` (U-1 to U-4). Fix log: `tests/qa/FIXES.md`, "Round 2". Decisions 64 to 74 in `DECISIONS.md`.
+
+**Cause (M-1, P0).** The server never ended the session; the app's own copy was thrown away. supabase-js (auth-js 2.119) deletes the stored session whenever a token refresh fails with an answer it does not class as a network error, once the access token has expired: a 429, the server's 400 `bad_json` for a request whose body was cut off by a dropped connection, or a non-JSON 4xx from a proxy or captive page. The app kept no copy, so "sign-in needed" stayed until the password was typed. A second defect slowed every reconnect: auth-js answers every caller with the last refresh failure for 60 s, and reconnecting did not reset that, so sync stood still for up to a minute.
+
+**Evidence.** The owner's phone session is still alive on the server: the newest refresh token is active and was never used or rejected (`audit-tokens.json`). Variants V10 (one `bad_json` answer) and V11 (one 429) reproduce the owner's screen exactly on the old code: session store emptied, one live session on the server, bar "Online / sign-in needed to sync" for good. V1 to V9 (offline 60 s, offline across expiry, answer lost mid-flight, Wi-Fi without internet, five cycles, reload offline, two tabs, back from the background) keep the session in both Chromium and WebKit; V6 shows the 60 s stall.
+
+| Suspect | Verdict |
+| --- | --- |
+| R1 an offline refresh makes supabase-js clear the session | Partly: a network failure keeps it; any other failed answer after expiry deletes it |
+| R2 rotation with a lost answer leaves a dead token | Ruled out on the real server (`probe-r2.json`) |
+| R3 the app marks sign-in needed on any failure and never retries | True |
+| R4 the same account in two places | Ruled out (M02, V7) |
+| R5 the service worker intercepts `/auth/v1/` | Ruled out (M16 passes on the old code) |
+| CDN or cache (U-4) | Ruled out: every file `max-age=0, must-revalidate`, `sw.js` `no-cache`, live files equal the build; an old worker serves the old build for at most one open after a deploy |
+
+**Fix.**
+- The stored session can be removed only by Sign out (`src/js/auth.js` storage guard).
+- "Sign-in needed" only when the server refused the refresh token (`refresh_token_not_found`, `validation_failed`, session or user gone). Everything else is a sync failure, retried with backoff while online.
+- The message clears by itself when a refresh succeeds; reconnecting resets auth-js's 60 s cooldown, so the refresh comes at once (0.7 s after reconnect, was none within 40 s).
+- The outbox is never touched by the auth path.
+
+**UI.**
+- U-1: no tab bar under New record, Edit, Record detail, Permissions and Track on a phone, as in the designs; footers keep the iPhone home-indicator inset; compact footers on short phones.
+- U-2: Add photo opens the phone's photo menu straight from the tap (camera, library, several photos), named "Add photo"; a camera the user blocked still leads to Permissions (C05).
+- U-3: a saved track opens from Tracks as its own screen (`#/track/<id>`) with duration, plot, KM, points, average accuracy, start and end time, and every point.
+
+### Cases
+
+| Case | Sev | Old code (localhost) | New code (localhost) | Live, build `7843417ee3bb` |
+| --- | --- | --- | --- | --- |
+| M11 offline past the token lifetime | P0 | FAIL: not uploaded 30 s after reconnect | PASS | PASS |
+| M12 network drops during a refresh | P0 | FAIL: session store emptied (`bad_json`) | PASS | PASS |
+| M13 five offline/online cycles | P0 | FAIL: cycle 1 not uploaded | PASS | PASS |
+| M14 message clears by itself | P1 | FAIL: message stays | PASS | PASS |
+| M15 offline records upload by themselves | P0 | FAIL: nothing uploaded | PASS | PASS |
+| M16 worker leaves auth alone | P1 | PASS | PASS | PASS |
+| M17 429, `bad_json`, HTML 403 keep the session | P0 | FAIL: session store emptied (429) | PASS | PASS |
+| C10 Add photo on a phone | P1 | FAIL: tab bar under the form | PASS | PASS |
+| D09 open a saved track | P1 | FAIL: no track screen | PASS | PASS |
+
+### Counts
+
+- **Localhost, one spec at a time:** A 10/10, B 16/16, C 10/10, D 9/9, E 8/8 (+E06), F 13/13, G 9/9, H 5/5, I 14/15 (I15 host headers, live only; I01 failed first on the known order effect, K01's helper region `QA-<ts>-E`, removed, then PASS), J 4/4, K 8/9 (K08 Lighthouse 77 locally: the local server does not compress; live 99), L 5/5, M 17/17.
+- **`npm run verify` twice in a row:** 12/12 gates, 6/6 other named tests, both times (132 s each).
+- **Live (`npm run qa` runner, one spec at a time):** 131 cases: **PASS 128, FAIL 0, FLAKY 2, BLOCKED 1**. F03 flaky: in the failed attempt B's record reached A through a pull that was already running before the press, so no new pull was counted (test timing). F08 flaky: Netlify reset one page load. Both passed again live without retries (`artifacts/fix/round2/live-f03-f08-rerun.log`). E06 BLOCKED as before. K08 live: performance 99, accessibility, best practices and SEO 100.
+- **Offline and back on the live site:** besides M, the variants V1 (offline 60 s), V2 (offline across expiry), V5 (five cycles), V6 (reload offline), V10 (`bad_json`) and V11 (429) were run against the deployed build in Chromium, and V2, V5, V10 in WebKit: sign-in never shown, session kept, every pending record uploaded (`artifacts/fix/signout2/live*/`).
+
+**Verdict.** The demo is safe to record on build `7843417ee3bb`: offline and back keeps the session and uploads by itself, the phone screens match the designs at the bottom, saved tracks open. Not checked here: a real iPhone (one Add photo tap and one airplane-mode cycle, `HANDOFF.md`).

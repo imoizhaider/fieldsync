@@ -49,3 +49,10 @@ npm run verify
 - **Sign in once more on every device you used before this fix.** Earlier `npm run seed` and `npm run verify` runs ended every session of the three demo accounts. On the new build the app says "Online / sign-in needed to sync"; open Sync and press **Sign in again**. Pending records stay on the device and upload right after. From now on a seed run keeps the sessions.
 - **Do not change a demo account's password in the Supabase dashboard** (or `SEED_PASSWORD`) shortly before recording: Supabase signs that account out on every device whenever its password is set, even to the same value.
 - `npm run seed` still empties the data tables, as before.
+
+## After round 2 (17 November 2026): offline/online sign-in and UI
+
+- **Nothing to do on the phone for the session.** The new build keeps the session through any offline/online change; one sign-in lasts until Sign out. If a phone still shows "Online / sign-in needed to sync" from the old build, open Sync and press **Sign in again** once (the old build had already thrown its copy of the session away; pending records stay and upload right after). Then close the app and open it again so the new build runs (the first open after a deploy can still run the old one).
+- **One manual check on a real iPhone** (not possible here): on the New record screen tap **Add photo**: the iOS menu (Take Photo, Photo Library, Choose File) should open at once. Then airplane mode on for a few minutes, off again: the bar should go "Offline / n pending", then "Back online", then "Online / all synced" without asking for a password.
+- **"Sign-in needed" now appears only if the server really ended the session** (password changed, account removed). It goes away by itself if a later refresh is accepted; otherwise use **Sign in again** on the Sync screen.
+- `npm run seed` was run at the end of this round: tables are empty, the three demo accounts exist, their sessions are kept.

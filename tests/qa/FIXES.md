@@ -90,13 +90,17 @@ Owner's report: as soon as the network goes off and comes back, the bar says "On
 
 | Bug | Sev | Status | Before | After (local) | After (live) |
 | --- | --- | --- | --- | --- | --- |
-| M-1 session lost after offline/online | P0 | FIXED | M11, M12, M13, M14, M15, M17 FAIL for the targeted reason (`signout2/before-m*.log`); V10/V11 reproduce the owner's screen | M 17/17 (`signout2/after-m-2.log`) | see below |
-| U-4 CDN or cache | P2 | NOT A BUG | evidence `ui/u4-cache-before.json`: every file `max-age=0` or `no-cache`, live = local build | | |
-| U-1 bottom of the screen | P2 | FIXED | tab bar under New record and Record detail on a phone, photo row under the Save bar at 375x667 (`ui/before/`) | `ui/after/`; C10 PASS | |
-| U-2 Add photo on a phone | P2 | FIXED | C10 FAIL (tab bar under the form) | C10 PASS, C05 PASS | |
-| U-3 saved track cannot be viewed | P2 | FIXED | D09 FAIL (no track screen) | D09 PASS, D08 PASS | |
+| M-1 session lost after offline/online | P0 | FIXED | M11, M12, M13, M14, M15, M17 FAIL for the targeted reason (`signout2/before-m*.log`); V10/V11 reproduce the owner's screen | M 17/17 (`signout2/after-m-2.log`) | M 17/17; V1, V2, V5, V6, V10, V11 on live: no sign-in, session kept |
+| U-4 CDN or cache | P2 | NOT A BUG | evidence `ui/u4-cache-before.json`: every file `max-age=0` or `no-cache`, live = local build | | `ui/u4-cache-after.json`: same headers, live SW = local `7843417ee3bb` 30 s after the push |
+| U-1 bottom of the screen | P2 | FIXED | tab bar under New record and Record detail on a phone, photo row under the Save bar at 375x667 (`ui/before/`) | `ui/after/`; C10 PASS | C10 PASS, K 9/9 |
+| U-2 Add photo on a phone | P2 | FIXED | C10 FAIL (tab bar under the form) | C10 PASS, C05 PASS | C 10/10 |
+| U-3 saved track cannot be viewed | P2 | FIXED | D09 FAIL (no track screen) | D09 PASS, D08 PASS | D 9/9 |
 
 The first after-run of M (`after-m-1.log`) found two defects in the fix itself, both corrected before the final run: the Sync screen showed the retry countdown instead of "Sign-in needed" (M03, M07), and the server's `validation_failed` answer for an unreadable token was not treated as a refusal (M14).
+
+Regression, localhost, one spec at a time (`artifacts/fix/round2/local-*.log`): A 10/10, B 16/16, C 10/10, D 9/9, E 8/8 (+E06 skipped), F 13/13, G 9/9, H 5/5, I 14/15 (I15 live only; I01 first failed on the known K01 helper-region order effect, region removed, PASS), J 4/4, K 8/9 (K08 Lighthouse 77: the local server does not compress; 99 live), L 5/5, M 17/17. `npm run verify` twice: 12/12 and 6/6 both times.
+
+Live, build `7843417ee3bb`, one spec at a time (`artifacts/fix/round2/live-*.log`): 131 cases, PASS 128, FAIL 0, FLAKY 2 (F03 test timing: the record came with a pull already running before the press; F08: Netlify reset one page load; both PASS on a rerun without retries), BLOCKED 1 (E06, as before).
 
 No test was weakened, skipped or deleted. D08 now opens the saved track and presses its Delete button to reach the same confirmation sheet (the old sheet no longer exists); every assertion is unchanged.
 
@@ -111,4 +115,4 @@ No test was weakened, skipped or deleted. D08 now opens the saved track and pres
 
 ## Next action
 
-None. To repeat: `npm run qa` (whole suite, then cleanup) or one spec with `--keep`.
+None. Manual: one Add photo tap and one airplane-mode cycle on a real iPhone (HANDOFF.md). To repeat: `npm run qa` (whole suite, then cleanup) or one spec with `--keep`.
