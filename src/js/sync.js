@@ -2,7 +2,7 @@
 // lastPulledAt. Starts by itself on app open and on reconnect; "Sync now"
 // is only a backup.
 import { db, getMeta, setMeta, deviceId } from './db.js';
-import { supabase, setDisplayName, currentUser } from './auth.js';
+import { supabase, setDisplayName, currentUser, hasStoredSession, isSessionRejected, forgetRefreshFailure } from './auth.js';
 import { mergeServerRecord, backoffDelay } from './merge.js';
 import { emit, on } from './bus.js';
 
@@ -255,14 +255,13 @@ async function run() {
   try {
     const { data, error } = await supabase.auth.getSession();
     if (!data?.session) {
-      // A refresh that failed for a network or server reason (offline, timeout,
-      // 5xx) leaves the session stored: that is a sync failure, retried with
-      // backoff. Only a session the server really ended needs a new sign-in.
-      if (error && (error.name === 'AuthRetryableFetchError' || /fetch|network/i.test(error.message ?? ''))) {
-        throw new SyncError('could not refresh the session');
-      }
-      update({ needsSignIn: true });
-      return;
+      // A failed refresh is never a dead end: the session stays stored (auth.js)
+      // and the refresh is tried again with backoff while the network is up.
+      // "Sign-in needed" is shown only when the server itself refused the
+      // refresh token, or when no session was ever stored on this device; it
+      // clears by itself as soon as a refresh succeeds.
+      if (isSessionRejected(error) || (!error && !hasStoredSession())) update({ needsSignIn: true });
+      throw new SyncError(error ? `could not refresh the session (${error.code ?? error.name})` : 'no session on this device');
     }
     update({ needsSignIn: false });
     const dev = await deviceId();
@@ -321,7 +320,18 @@ export function startAutoSync() {
   if (started) { syncNow(); return; }
   started = true;
 
+  // A refresh succeeded (here, in another tab, or by signing in again): the
+  // "sign-in needed" message goes away by itself and the outbox uploads.
+  supabase?.auth.onAuthStateChange((event, session) => {
+    if (session && (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && state.needsSignIn) {
+      update({ needsSignIn: false });
+      state.failures = 0;
+      setTimeout(() => syncNow(), 0); // not inside the auth callback (it holds the library's lock)
+    }
+  });
+
   window.addEventListener('online', async () => {
+    forgetRefreshFailure(); // a failure from while offline must not delay the refresh now
     await refreshCounts();
     state.failures = 0;
     update({ online: true, reconnected: state.pending, retryAt: null });

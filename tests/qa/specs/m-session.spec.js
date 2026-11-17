@@ -440,3 +440,211 @@ test('M10 [P1] a token endpoint that fails (503) is a sync failure, not a sign-i
   expect(refreshes(log).some((r) => r.status === 200), 'refreshed once the server was back').toBe(true);
   expect((await seen(d.page)).routes).not.toContain('signin');
 });
+
+// ------------------------------------------- round 2: offline and back again
+// Bug M-1 (round 2): after the network went off and came back the app asked for
+// the password. M11 to M16 are the brief's M10 to M15 (M10 was already taken);
+// M17 covers the answers that made supabase-js throw the session away.
+
+// Wait until the device tried to refresh while offline and gave up. supabase-js
+// retries a refresh for about 25 s, then keeps the failure for 60 s and answers
+// every caller with it: a reconnect inside that window is the hard case.
+async function failedRefreshWhileOffline(log, since = Date.now()) {
+  const fails = () => log.failed.filter((f) => f.url.endsWith('grant_type=refresh_token') && Date.parse(f.t) >= since).map((f) => Date.parse(f.t));
+  await expect.poll(() => fails().length, { timeout: 70_000, message: 'a refresh was tried and failed while offline' }).toBeGreaterThan(0);
+  await expect.poll(() => { const f = fails(); return f.at(-1) - f[0] >= 20_000 && Date.now() - f.at(-1) >= 4_000; },
+    { timeout: 60_000, message: 'the library stopped retrying (its failure is now cached)' }).toBe(true);
+}
+const signInShown = async (page) => (await seen(page)).bar.filter((t) => /sign-in/i.test(t));
+
+test('M11 [P0] offline for longer than the access-token lifetime, then online: syncs by itself, no sign-in asked', async ({ qa }) => {
+  const key = await freshUser('M11');
+  const d = await device(qa, key);
+  const log = tracked.at(-1).log;
+  await d.open();
+  await d.offline();
+  const id = await d.createRecord({ title: uniq('M11 offline'), fields: { ph: 7.1 } });
+  // The token ran out more than an hour ago (its whole lifetime) while the device was offline.
+  await expireToken(d.page, -3700);
+  await failedRefreshWhileOffline(log);
+  expect((await localSession(d.page)).authUser, 'session kept while offline').toBe(state.users[key].id);
+  const back = Date.now();
+  await d.online();
+  // No button, no password: the token is refreshed and the record uploads soon after the network returns.
+  await waitSql('select id from public.records where id = $1', [id], (r) => r.length === 1, 30_000);
+  qa.note('seconds from reconnect to upload', (Date.now() - back) / 1000);
+  await d.waitSynced();
+  expect(refreshes(log).some((r) => r.status === 200 && Date.parse(r.t) >= back), 'token refreshed after the reconnect').toBe(true);
+  expect(await signInShown(d.page)).toEqual([]);
+  expect((await seen(d.page)).routes).not.toContain('signin');
+});
+
+test('M12 [P0] the network drops during a token refresh, then returns: recovers without a sign-in', async ({ qa }) => {
+  const key = await freshUser('M12');
+  const d = await device(qa, key);
+  const log = tracked.at(-1).log;
+  await d.open();
+  let step = 0;
+  await d.context.route(isRefresh, async (r) => {
+    step += 1;
+    if (step === 1) {
+      // Drop 1: the request reaches the server (which rotates the token), the answer never comes back.
+      await r.fetch().catch(() => null);
+      await d.context.setOffline(true);
+      return r.abort('internetdisconnected');
+    }
+    if (step === 2) {
+      // Drop 2: the connection breaks while the request body is being sent. The server
+      // gets half a body and answers with its real 400 bad_json; then the device is offline.
+      const body = r.request().postData() ?? '';
+      const res = await r.fetch({ postData: body.slice(0, Math.floor(body.length / 2)) });
+      qa.note('server answer to the cut-off request', { status: res.status(), body: (await res.text()).slice(0, 200) });
+      await r.fulfill({ response: res });
+      await d.context.setOffline(true);
+      return undefined;
+    }
+    return r.continue();
+  });
+  await expireToken(d.page);
+  const id = await d.createRecord({ title: uniq('M12 pending'), fields: { ph: 7.2 } });
+  await expect.poll(() => step, { timeout: 30_000, message: 'first refresh sent' }).toBeGreaterThanOrEqual(1);
+  await sleep(5_000);
+  await d.context.setOffline(false);
+  await expect.poll(() => step, { timeout: 90_000, message: 'second refresh sent' }).toBeGreaterThanOrEqual(2);
+  await sleep(5_000);
+  expect((await localSession(d.page)).authUser, 'session still stored after both drops').toBe(state.users[key].id);
+  await d.context.setOffline(false);
+  await waitSql('select id from public.records where id = $1', [id], (r) => r.length === 1, 60_000);
+  await d.waitSynced();
+  qa.note('auth', log);
+  expect(await signInShown(d.page), 'no sign-in asked at any point').toEqual([]);
+  expect((await seen(d.page)).routes).not.toContain('signin');
+});
+
+test('M13 [P0] offline and online cycled five times: still signed in, status bar correct', async ({ qa }) => {
+  test.setTimeout(600_000);
+  const key = await freshUser('M13');
+  const d = await device(qa, key);
+  const log = tracked.at(-1).log;
+  await d.open();
+  const times = [];
+  for (let cycle = 1; cycle <= 5; cycle++) {
+    await d.offline();
+    const id = await d.createRecord({ title: uniq(`M13 cycle ${cycle}`), fields: { ph: 7.3 } });
+    await expect(d.page.locator('#sb-text'), `cycle ${cycle}: offline bar`).toHaveText('Offline / 1 pending');
+    await expireToken(d.page);
+    await failedRefreshWhileOffline(log, Date.now());
+    const back = Date.now();
+    await d.online();
+    await waitSql('select id from public.records where id = $1', [id], (r) => r.length === 1, 30_000);
+    await expect(d.page.locator('#sb-text'), `cycle ${cycle}: online bar`).toHaveText('Online / all synced', { timeout: 30_000 });
+    times.push((Date.now() - back) / 1000);
+    expect((await localSession(d.page)).authUser, `cycle ${cycle}: signed in`).toBe(state.users[key].id);
+  }
+  qa.note('seconds from reconnect to all synced, per cycle', times);
+  expect(await signInShown(d.page)).toEqual([]);
+  expect((await seen(d.page)).routes).not.toContain('signin');
+});
+
+test('M14 [P1] the "sign-in needed" message clears by itself after a successful refresh', async ({ qa }) => {
+  test.setTimeout(400_000);
+  const key = await freshUser('M14');
+  const d = await device(qa, key);
+  await d.open();
+  let refused = 0;
+  await d.context.route(isRefresh, async (r) => {
+    if (refused >= 1) return r.continue();
+    refused += 1;
+    // The real server's answer for a refresh token it does not know (sent with a dead token).
+    const res = await r.fetch({ postData: JSON.stringify({ refresh_token: 'm14deadtoken0' }) });
+    return r.fulfill({ response: res });
+  });
+  await expireToken(d.page);
+  const id = await d.createRecord({ title: uniq('M14 pending'), fields: { ph: 7.4 } });
+  await expect(d.page.locator('#sb-text'), 'refused by the server: sign-in needed').toHaveText(/sign-in needed/i, { timeout: 40_000 });
+  await d.shot('sign-in-needed');
+  // The next refresh is accepted. Nobody presses anything.
+  await expect(d.page.locator('#sb-text'), 'message gone by itself').not.toHaveText(/sign-in/i, { timeout: 180_000 });
+  await waitSql('select id from public.records where id = $1', [id], (r) => r.length === 1, 60_000);
+  await d.waitSynced();
+  expect((await seen(d.page)).routes).not.toContain('signin');
+});
+
+test('M15 [P0] pending records made while offline upload on their own after reconnecting', async ({ qa }) => {
+  const key = await freshUser('M15');
+  const d = await device(qa, key);
+  const log = tracked.at(-1).log;
+  await d.open();
+  await d.offline();
+  const ids = [
+    await d.createRecord({ title: uniq('M15 one'), fields: { ph: 7.5 }, photos: [photo(1)] }),
+    await d.createRecord({ title: uniq('M15 two'), fields: { ph: 7.6 } }),
+    await d.createRecord({ title: uniq('M15 three'), type: 'wildlife', fields: { species: 'Heron', count: 2 } }),
+  ];
+  const queued = (await d.outbox()).length;
+  await expireToken(d.page);
+  await failedRefreshWhileOffline(log);
+  expect((await d.outbox()).length, 'outbox untouched while offline').toBe(queued);
+  await d.online();
+  // No Sync now, no sign-in.
+  await waitSql('select id from public.records where id = any($1)', [ids], (r) => r.length === 3, 30_000);
+  await waitSql('select id from public.media where record_id = $1', [ids[0]], (r) => r.length === 1, 60_000);
+  await d.waitSynced();
+  expect(d.rpcRequests('sync_push').length).toBeGreaterThan(0);
+  expect(await signInShown(d.page)).toEqual([]);
+});
+
+test('M16 [P1] the service worker does not cache or intercept auth requests', async ({ qa }) => {
+  const key = await freshUser('M16');
+  const d = await device(qa, key);
+  const log = tracked.at(-1).log;
+  const viaWorker = [];
+  d.context.on('request', (r) => { if (r.url().includes('/auth/v1/') && r.serviceWorker()) viaWorker.push(r.url()); });
+  const fromWorker = [];
+  d.page.on('response', (r) => { if (r.url().includes('/auth/v1/') && r.fromServiceWorker()) fromWorker.push(r.url()); });
+  await d.open();
+  expect(await d.page.evaluate(() => Boolean(navigator.serviceWorker.controller)), 'the worker controls the page').toBe(true);
+  await d.offline();
+  await expireToken(d.page);
+  await failedRefreshWhileOffline(log);
+  await d.online();
+  // Generous: this case is about the worker, not about how soon the refresh comes.
+  await expect.poll(() => refreshes(log).some((r) => r.status === 200), { timeout: 150_000, message: 'refreshed online' }).toBe(true);
+  const cached = await d.page.evaluate(async () => {
+    const out = [];
+    for (const name of await caches.keys()) {
+      for (const req of await (await caches.open(name)).keys()) out.push(req.url);
+    }
+    return { origin: location.origin, urls: out };
+  });
+  qa.note('cache entries', cached.urls.length);
+  expect(cached.urls.filter((u) => !u.startsWith(cached.origin) || u.includes('/auth/v1/')), 'only the app files are cached').toEqual([]);
+  expect(viaWorker, 'no auth request was made by the worker').toEqual([]);
+  expect(fromWorker, 'no auth answer came from the worker').toEqual([]);
+  expect(log.auth.filter((a) => a.dir === '>').length, 'auth requests were seen').toBeGreaterThan(0);
+});
+
+test('M17 [P0] a refresh answered with an error that is not a rejection (rate limit, cut-off request, proxy page) keeps the session', async ({ qa }) => {
+  test.setTimeout(500_000);
+  const answers = [
+    { status: 429, contentType: 'application/json', body: JSON.stringify({ code: 429, error_code: 'over_request_rate_limit', msg: 'Request rate limit reached' }) },
+    { status: 400, contentType: 'application/json', body: JSON.stringify({ code: 400, error_code: 'bad_json', msg: 'Could not parse request body as JSON: unexpected end of JSON input' }) },
+    { status: 403, contentType: 'text/html', body: '<html><body>Access denied by the network</body></html>' },
+  ];
+  for (const answer of answers) {
+    const key = await freshUser(`M17-${answer.status}`);
+    const d = await device(qa, key, `device${answer.status}`);
+    await d.open();
+    let n = 0;
+    await d.context.route(isRefresh, (r) => { if (n >= 1) return r.continue(); n += 1; return r.fulfill(answer); });
+    await expireToken(d.page);
+    const id = await d.createRecord({ title: uniq(`M17 ${answer.status}`), fields: { ph: 7.7 } });
+    await expect.poll(() => n, { timeout: 30_000, message: `${answer.status} answered` }).toBe(1);
+    await sleep(2_000);
+    expect((await localSession(d.page)).authUser, `${answer.status}: session still stored`).toBe(state.users[key].id);
+    await waitSql('select id from public.records where id = $1', [id], (r) => r.length === 1, 150_000);
+    await d.waitSynced();
+    expect(await signInShown(d.page), `${answer.status}: no sign-in asked`).toEqual([]);
+    await d.context.close();
+  }
+});
