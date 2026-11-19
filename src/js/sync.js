@@ -236,7 +236,10 @@ async function pull() {
     if (data.conflicts.length > 0 || since === null) {
       const known = new Map((since === null ? [] : await getMeta('conflicts', [])).map((c) => [c.id, c]));
       const waiting = new Set((await db.outbox.where('table').equals('conflict_log').toArray()).map((e) => e.rowId));
-      for (const c of data.conflicts) known.set(c.id, waiting.has(c.id) ? { ...c, resolved: true } : c);
+      for (const c of data.conflicts) {
+        const resolution = known.get(c.id)?.resolution; // this device's Accept / Reject label
+        known.set(c.id, { ...c, ...(waiting.has(c.id) ? { resolved: true } : {}), ...(resolution ? { resolution } : {}) });
+      }
       await setMeta('conflicts', [...known.values()].sort((a, b) => (a.at < b.at ? 1 : -1)));
     }
     // Overlap the next pull by a few seconds: rows committed while this pull

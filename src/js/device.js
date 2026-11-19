@@ -4,18 +4,46 @@ import { fitWithin } from './merge.js';
 export const PHOTO_MAX_SIDE = 1280;
 export const PHOTO_QUALITY = 0.7;
 
+export const UNREADABLE_PHOTO = 'This file is not a photo this phone can read. Pick a JPEG, PNG or HEIC photo.';
+
+// Phone photos decode in different ways per browser: createImageBitmap first,
+// then an <img> (Safari decodes HEIC there, and some Android builds refuse
+// large camera JPEGs as an ImageBitmap). Returns { source, w, h, done }.
+async function decodePhoto(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return { source: bitmap, w: bitmap.width, h: bitmap.height, done: () => bitmap.close?.() };
+    } catch { /* try the <img> path */ }
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  try {
+    img.src = url;
+    await (img.decode ? img.decode() : new Promise((ok, fail) => { img.onload = ok; img.onerror = fail; }));
+  } catch {
+    URL.revokeObjectURL(url);
+    throw new Error(UNREADABLE_PHOTO);
+  }
+  if (!img.naturalWidth || !img.naturalHeight) { URL.revokeObjectURL(url); throw new Error(UNREADABLE_PHOTO); }
+  return { source: img, w: img.naturalWidth, h: img.naturalHeight, done: () => URL.revokeObjectURL(url) };
+}
+
 // Shrink a photo on the device before it is saved: longest side 1280 px, JPEG ~70 %.
 export async function compressPhoto(file) {
-  const bitmap = await createImageBitmap(file);
-  const { width, height } = fitWithin(bitmap.width, bitmap.height, PHOTO_MAX_SIDE);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
-  bitmap.close?.();
-  const blob = await new Promise((resolve) => { canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY); });
-  if (!blob) throw new Error('This photo could not be read');
-  return { blob, width, height };
+  const { source, w, h, done } = await decodePhoto(file);
+  try {
+    const { width, height } = fitWithin(w, h, PHOTO_MAX_SIDE);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(source, 0, 0, width, height);
+    const blob = await new Promise((resolve) => { canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY); });
+    if (!blob) throw new Error(UNREADABLE_PHOTO);
+    return { blob, width, height };
+  } finally {
+    done();
+  }
 }
 
 function toPoint(pos) {
