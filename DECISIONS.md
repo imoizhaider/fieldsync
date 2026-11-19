@@ -116,6 +116,20 @@ Evidence in `artifacts/fix/signout3/README.md`.
 78. **The Sync screen links to "Regions and sign out"**, so Sign out is one tap from a tab at any width.
 79. **M18 and M19 added.** Both fail on the old code for the targeted reason: M18 finds no Sign in button in the status bar, and M19 finds no account link on the Sync screen (`signout3/before-m18-m19.log`). Both pass after the change.
 
+## Round 4: conflict decisions and photos on phones (20 November 2026)
+
+Evidence in `artifacts/fix/round4/`.
+
+80. **The conflict log has Accept and Reject.**
+    - For a same-field conflict, Accept keeps the value that won and marks the entry reviewed. Reject writes the overwritten value again as a normal edit of this device, then marks the entry reviewed, so the value reaches every device through the usual sync.
+    - For an edit against a deleted record, Accept delete keeps the record deleted, and Restore record works as before.
+    - The merge rules are unchanged: the later arrival still wins first (G02, G03, G06), and a person then decides. The owner said that today the newest value is taken automatically. Holding a conflict open until someone chooses would change the merge rule, so that is left for the owner to decide.
+    - The Accept or Reject label is kept on the device that pressed it, and survives later pulls. The server only stores `resolved`.
+81. **Phone photos decode in two ways.** `compressPhoto` tries `createImageBitmap` first, then an `<img>`. Safari decodes HEIC there, and some Android builds refuse camera JPEGs as an ImageBitmap. Each picked file is handled on its own, so one unreadable file no longer drops the good photos picked with it. The message is in plain words: "1 of 3 files could not be added...". This also closes the C04 finding.
+82. **"Try again" on Permissions opens the camera even when the site's camera permission reads blocked.** A file input does not use that permission; the phone's camera app takes the photo. Add photo still leads to Permissions first when the camera reads blocked (C05). The file inputs are visually hidden instead of `hidden`, because some iPhone builds do not open a `display:none` input from a script click.
+83. **"Image edit failed" for a researcher was not a server rule.** C11 edits photos on a phone, as a researcher, on their own record and on another researcher's. It passes on the live build before this change. Removing and adding photos reaches Postgres and Storage. The owner's failure is therefore the phone's photo decoding (decision 81). If it still fails on the iPhone, the error text on the form is needed.
+84. **GPS track coordinates on mobile: dropped at the owner's request** ("ye wala ho gaya, chhod de").
+
 ## Design screens and their built counterparts
 
 | # | Design file | Built as |

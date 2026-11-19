@@ -65,6 +65,9 @@ Assumptions where the PRD is silent (closest reading, also noted in the report)
 | C08 | P1 | Photo made on device A seen on device B | B downloads and shows it |
 | C09 | P2 | Free space, then reopen record online | Local blob removed, then fetched again |
 | C10 | P1 | Add photo on a phone (390x844 and 375x667, touch) | No tab bar under the form; Save and Add photo on screen and not covered, Add at least 44 px and named "Add photo"; one tap opens the picker (images, no `capture`, multiple); 2 photos added, record and photos reach the server |
+| C11 | P1 | Phone, researcher: edit the photos of their own record and of another researcher's | Remove 1 and add 2: no error and nothing rejected. The server has the new set, the removed photo is gone, and the files are uploaded |
+| C12 | P1 | Phone whose browser refuses picked files as an ImageBitmap; pick photo, text file, photo | Both photos added through the `<img>` path, with the message "1 of 3 files could not be added". The photos are JPEG at most 1280 px and reach the server |
+| C13 | P1 | Camera blocked for the site, Add photo, then "Try again" on Permissions | The camera picker (`capture=environment`) opens; the photo is added and the draft is kept |
 
 ## D. GPS
 
@@ -125,6 +128,7 @@ Assumptions where the PRD is silent (closest reading, also noted in the report)
 | G07 | P0 | Conflict log screen | Shows every `conflict_log` row for the region, on both devices and in the lead console |
 | G08 | P1 | Edit synced first, stale delete arrives later | Edit is not silently lost: log entry or restore path |
 | G09 | P2 | Same value on both devices | No conflict row |
+| G10 | P1 | Conflict log on a phone: Accept one same-field conflict, Reject another | Accept keeps the kept value. Reject puts the overwritten value back on the server and on the other device, makes no new conflict, and leaves other fields alone. Both are resolved, the buttons are gone on both devices, and the decision label survives a pull |
 
 ## H. Idempotency and duplicates
 

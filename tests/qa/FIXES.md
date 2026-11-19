@@ -114,6 +114,29 @@ Owner's report: the app keeps asking to sign in, there is no separate sign-in op
 | --- | --- | --- | --- | --- |
 | S-3 no way out of "sign-in needed" | P0 | FIXED | M18 and M19 FAIL: no Sign in in the status bar, no account link on Sync (`signout3/before-m18-m19.log`) | M18 and M19 PASS (`signout3/after-m18-m19.log`) |
 
+## Round 4 (20 November 2026): conflict decisions and photos on phones
+
+| Bug | Sev | Status | Before (old code, `round4/before*.log`) | After (local) |
+| --- | --- | --- | --- | --- |
+| No Accept or Reject in the conflict log; the newest value is always taken | P1 | FIXED | G10 FAIL: no Accept button | G10 PASS, G 10/10 |
+| Add or take photo on a phone does not work | P1 | FIXED | C12 FAIL ("Photos / 0": decode refused, and one bad file dropped the rest). C13 FAIL: "Try again" did not open the camera while the site camera read blocked | C12 and C13 PASS, C 13/13 |
+| Image edit fails on a researcher account | P1 | NOT A SERVER BUG | C11 PASS on live before the change (own record and another researcher's) | C11 PASS; covered by the decode fix |
+| GPS track coordinates on mobile | P2 | DROPPED | the owner said it is solved | |
+
+Regression, localhost, one spec at a time (`round4/local-*.log`):
+
+| Spec | Result |
+| --- | --- |
+| A | 10/10 |
+| B | 16/16 |
+| C | 13/13 |
+| E | 8/8, E06 skipped |
+| F | 13/13 |
+| G | 10/10 |
+| K | 8/9, K08 Lighthouse 77 locally (known; 99 live) |
+
+C12 first failed after the change because the test's own simulation also blocked `createImageBitmap` for the harness, which measures stored JPEGs with it. The simulation now refuses only picked `File` objects, as a phone does. It was then run again on the old code (`before-c12.log`, still FAIL "Photos / 0") and on the new code (PASS).
+
 ## Done
 
 1. QA rows cleaned, `npm run verify` passed twice in a row (12/12, 6/6).
