@@ -61,6 +61,11 @@ a { color: inherit; text-decoration: none; }
 #statusbar .sb-mark { width: 8px; height: 8px; flex: none; background: #f0a030; }
 #statusbar[data-tone="online"] .sb-mark { background: #7fe0a6; }
 #statusbar[data-tone="problem"] .sb-mark { background: var(--white); }
+#statusbar .sb-action {
+  flex: none; display: inline-flex; align-items: center; min-height: 28px; padding: 0 14px;
+  color: var(--white); border: 1px solid var(--white); text-decoration: none; font-weight: 700;
+}
+#statusbar .sb-action:hover, #statusbar .sb-action:focus-visible { background: rgba(255, 255, 255, .18); }
 #statusbar .sb-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0, 0, 0, .35); }
 #statusbar .sb-progress i { display: block; height: 100%; background: #7fe0a6; transition: width .2s linear; }
 

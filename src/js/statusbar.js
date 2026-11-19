@@ -17,6 +17,7 @@ export function paint() {
   let left;
   let right = `Last sync ${hhmm(state.lastSyncAt)}`;
   let progress = null;
+  let action = null;
 
   if (mode === 'signin') {
     left = `${online ? 'Online' : 'Offline'} / sign-in needed`;
@@ -37,6 +38,8 @@ export function paint() {
   } else if (state.needsSignIn) {
     tone = 'problem';
     left = 'Online / sign-in needed to sync';
+    // The way back is on every screen, not only on the Sync screen.
+    action = html`<a class="sb-action" id="sb-signin" href="#/signin/again">Sign in</a>`;
   } else if (state.rejected > 0) {
     tone = 'problem';
     left = 'Online / sync problem';
@@ -55,6 +58,6 @@ export function paint() {
   el.dataset.online = online ? '1' : '0';
   render(el, html`
     <span class="sb-left"><span class="sb-mark"></span><span id="sb-text">${left}</span></span>
-    <span id="sb-right">${right}</span>
+    ${action ?? html`<span id="sb-right">${right}</span>`}
     ${progress === null ? '' : html`<span class="sb-progress"><i style="width:${progress}%"></i></span>`}`);
 }

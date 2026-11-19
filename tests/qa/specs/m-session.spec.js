@@ -648,3 +648,82 @@ test('M17 [P0] a refresh answered with an error that is not a rejection (rate li
     await d.context.close();
   }
 });
+
+// The server ends every session of the account (an admin password reset, as the
+// seed did before decision 57), with work pending on the device. A real rejection.
+async function endedByServer(d, uid, title) {
+  await d.offline();
+  const id = await d.createRecord({ title, fields: { ph: 6.6 } });
+  const { error } = await admin.auth.admin.updateUserById(uid, { password: state.password });
+  expect(error).toBeNull();
+  expect(await liveSessions(uid), 'server ended the sessions').toBe(0);
+  await expireToken(d.page);
+  await d.online();
+  await expect(d.page.locator('#sb-text'), 'status bar says a sign-in is needed').toHaveText(/sign-in needed/i, { timeout: 40_000 });
+  return id;
+}
+
+test('M18 [P0] laptop: after the server ends the session, the status bar offers Sign in, the user can go back without signing in, and one sign-in uploads the pending work', async ({ qa }) => {
+  const key = await freshUser('M18');
+  const uid = state.users[key].id;
+  const d = await device(qa, key, 'laptop', { viewport: { width: 1280, height: 800 } });
+  await d.open();
+  const id = await endedByServer(d, uid, uniq('M18 pending'));
+  await d.go('#/records');
+  const barSignIn = d.page.locator('#statusbar #sb-signin');
+  await expect(barSignIn, 'a Sign in button in the status bar, on the records screen').toBeVisible({ timeout: 10_000 });
+  await d.shot('bar-sign-in');
+  await barSignIn.click();
+  await d.page.waitForFunction(() => location.hash === '#/signin/again' && document.body.dataset.route === 'signin', null, { timeout: 10_000 });
+  await expect(d.page.locator('input[name="email"]'), 'email is filled in').toHaveValue(state.users[key].email);
+  // The way back, without a password.
+  const later = d.page.locator('#signin-later');
+  await expect(later, '"Not now" on the Sign in again screen').toBeVisible();
+  await d.shot('sign-in-again');
+  await later.click();
+  await d.page.waitForFunction(() => document.body.dataset.route === 'records', null, { timeout: 10_000 });
+  await expect(d.page.locator(`[data-record-id="${id}"]`).first(), 'the pending record is still listed').toBeVisible({ timeout: 10_000 });
+  expect((await d.outbox()).some((e) => e.recordId === id || e.rowId === id), 'pending kept').toBe(true);
+  expect((await localSession(d.page)).appUser, 'still the same user on this device').toBe(uid);
+  // One sign-in from the status bar, and everything uploads.
+  await d.page.locator('#statusbar #sb-signin').click();
+  await d.page.waitForFunction(() => document.body.dataset.route === 'signin', null, { timeout: 10_000 });
+  await d.page.fill('input[name="password"]', state.password);
+  await d.page.click('button[type="submit"]');
+  await d.page.waitForFunction(() => document.body.dataset.route === 'records', null, { timeout: 30_000 });
+  await waitSql('select id from public.records where id = $1', [id], (r) => r.length === 1, 60_000);
+  await d.waitSynced(60_000);
+  await expect(d.page.locator('#sb-text')).not.toHaveText(/sign-in/i);
+  await expect(d.page.locator('#statusbar #sb-signin')).toHaveCount(0);
+  expect(await liveSessions(uid), 'exactly one new session').toBe(1);
+});
+
+test('M19 [P1] phone: Sign out is reachable from the Sync screen and from Sign in again, and leads to a plain sign-in for another account', async ({ qa }) => {
+  const key = await freshUser('M19');
+  const other = await freshUser('M19-other');
+  const uid = state.users[key].id;
+  const d = await device(qa, key);
+  await d.open();
+  // Signed in normally: the Sync screen (a tab) leads to Regions and Sign out.
+  await d.go('#/sync');
+  const account = d.page.locator('#open-account');
+  await expect(account, 'Sync screen links to Regions and sign out').toBeVisible({ timeout: 10_000 });
+  await account.click();
+  await d.page.waitForFunction(() => document.body.dataset.route === 'regions', null, { timeout: 10_000 });
+  await expect(d.page.locator('[data-act="signout"]')).toBeVisible();
+  // Session ended by the server: Sign in again offers Sign out too.
+  await endedByServer(d, uid, uniq('M19 pending'));
+  await d.page.locator('#statusbar #sb-signin').click();
+  await d.page.waitForFunction(() => document.body.dataset.route === 'signin', null, { timeout: 10_000 });
+  await d.page.locator('#signin-other').click();
+  await d.page.locator('[data-act="leave"]').click();
+  await d.page.waitForFunction(() => location.hash === '#/signin' && document.body.dataset.route === 'signin', null, { timeout: 10_000 });
+  await expect(d.page.locator('input[name="email"]'), 'a plain sign-in, nothing filled in').toHaveValue('');
+  expect((await localSession(d.page)).appUser, 'signed out on this device').toBeNull();
+  await d.page.fill('input[name="email"]', state.users[other].email);
+  await d.page.fill('input[name="password"]', state.password);
+  await d.page.click('button[type="submit"]');
+  await d.page.waitForFunction(() => document.body.dataset.route === 'records', null, { timeout: 30_000 });
+  expect((await localSession(d.page)).appUser, 'the other account is signed in').toBe(state.users[other].id);
+  await expect(d.page.locator('#sb-text')).not.toHaveText(/sign-in/i, { timeout: 30_000 });
+});

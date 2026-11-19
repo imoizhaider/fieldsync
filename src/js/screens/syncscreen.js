@@ -5,6 +5,7 @@ import { conflicts } from '../queries.js';
 import { formatLabel } from '../merge.js';
 import { state, syncNow } from '../sync.js';
 import { retryRejected } from '../store.js';
+import { currentUser } from '../auth.js';
 
 async function describe(entries) {
   const out = [];
@@ -104,6 +105,7 @@ export async function mount(el) {
         </ul>
         <ul class="rows">
           <li><a class="row" href="#/storage"><span class="row-line"><span>Storage on this device</span><span class="row-meta">Open</span></span></a></li>
+          <li><a class="row" href="#/regions" id="open-account"><span class="row-line"><span>Regions and sign out</span><span class="row-meta">${currentUser()?.name ?? ''}</span></span></a></li>
         </ul>
       </div>
       <div class="foot pair-row">

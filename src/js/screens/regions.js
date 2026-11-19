@@ -1,7 +1,7 @@
-import { html, render, go, openSheet } from '../html.js';
+import { html, render, go } from '../html.js';
 import { regions, currentRegion, setCurrentRegion, recordCounts } from '../queries.js';
-import { currentUser, signOut } from '../auth.js';
-import { state } from '../sync.js';
+import { currentUser } from '../auth.js';
+import { askSignOut } from '../leave.js';
 
 export async function mount(el) {
   async function paint() {
@@ -45,19 +45,7 @@ export async function mount(el) {
       go('#/records');
       return;
     }
-    if (ev.target.closest('[data-act="signout"]')) {
-      const leave = async (close) => { close(); await signOut(); go('#/signin'); };
-      openSheet(html`
-        <div class="eyebrow">Sign out</div>
-        <h2>Sign out of this device?</h2>
-        <p class="muted">${state.pending > 0
-          ? `${state.pending} ${state.pending === 1 ? 'change has' : 'changes have'} not uploaded yet. They stay saved on this device and upload after you sign in again.`
-          : 'Your records stay on this device. Signing in again needs a connection.'}</p>
-        <div class="actions">
-          <button class="btn secondary" data-act="keep">Stay signed in</button>
-          <button class="btn" data-act="leave">Sign out</button>
-        </div>`, { leave });
-    }
+    if (ev.target.closest('[data-act="signout"]')) askSignOut();
   });
 
   await paint();

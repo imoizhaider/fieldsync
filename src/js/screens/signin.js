@@ -1,6 +1,7 @@
 import { html, render, go } from '../html.js';
 import { signIn, configured, currentUser } from '../auth.js';
 import { startAutoSync, syncNow } from '../sync.js';
+import { askSignOut } from '../leave.js';
 
 export async function mount(el, params) {
   // #/signin/again: the session ended while this user stays signed in on the
@@ -37,7 +38,9 @@ export async function mount(el, params) {
           <p class="error-text small" role="alert" id="signin-error" hidden></p>
           <button class="btn block" type="submit">Sign in</button>
           ${again
-            ? html`<p class="muted small" id="signin-again-note">Your session ended. Your records stay on this device and upload after you sign in.</p>`
+            ? html`<p class="muted small" id="signin-again-note">Your session ended. Your records stay on this device and upload after you sign in.</p>
+              <a class="btn secondary block" href="#/records" id="signin-later">Not now, back to my records</a>
+              <button class="btn secondary block" type="button" id="signin-other">Sign out and use another account</button>`
             : html`<p class="muted small">Your session is saved on this device. Next time fieldsync opens with no signal.</p>`}
           <div class="spacer"></div>
           <div class="notice hint small"><b>No signal right now?</b> You can still open FieldSync if you signed in on this device before. A first sign-in needs a connection.</div>
@@ -47,10 +50,11 @@ export async function mount(el, params) {
 
   const form = el.querySelector('form');
   const error = el.querySelector('#signin-error');
-  const button = form.querySelector('button');
+  const button = form.querySelector('button[type="submit"]');
   if (again) {
     form.email.value = again.email ?? '';
     form.password.focus();
+    el.querySelector('#signin-other').addEventListener('click', () => askSignOut());
   }
   if (!configured) {
     error.hidden = false;
