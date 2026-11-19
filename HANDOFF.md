@@ -56,3 +56,9 @@ npm run verify
 - **One manual check on a real iPhone** (not possible here): on the New record screen tap **Add photo**: the iOS menu (Take Photo, Photo Library, Choose File) should open at once. Then airplane mode on for a few minutes, off again: the bar should go "Offline / n pending", then "Back online", then "Online / all synced" without asking for a password.
 - **"Sign-in needed" now appears only if the server really ended the session** (password changed, account removed). It goes away by itself if a later refresh is accepted; otherwise use **Sign in again** on the Sync screen.
 - `npm run seed` was run at the end of this round: tables are empty, the three demo accounts exist, their sessions are kept.
+
+## After round 3 (19 November 2026): the way out of "sign-in needed"
+
+- **Laptop that shows "Online / sign-in needed to sync":** press **Sign in** at the right of the red bar and type the password once. Its session ended on 16 November, when the old seed still reset passwords. After that one sign-in it stays signed in until Sign out. Pending records upload right away.
+- "Sign in again" now has **Not now, back to my records** and **Sign out and use another account**. Sign out can also be reached from the Sync tab, through **Regions and sign out**.
+- That laptop still holds records from before the 17 November seed reset. They are no longer on the server. Sign out does not remove them, because the local database is kept per user. To start clean before recording the demo, clear this site's data in the browser (Edge: the lock icon, then Site permissions, then Reset permissions and clear data), then sign in once. This also deletes the pending test record "hahahaha".

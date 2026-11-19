@@ -104,6 +104,16 @@ Live, build `7843417ee3bb`, one spec at a time (`artifacts/fix/round2/live-*.log
 
 No test was weakened, skipped or deleted. D08 now opens the saved track and presses its Delete button to reach the same confirmation sheet (the old sheet no longer exists); every assertion is unchanged.
 
+## Round 3 (19 November 2026): stuck on "sign-in needed"
+
+Owner's report: the app keeps asking to sign in, there is no separate sign-in option, and no way back. The screenshot comes from Edge at laptop width. Evidence: `artifacts/fix/signout3/README.md`.
+
+**Cause:** the session refusal was real. The laptop's session ended on 16 November, when the old seed still reset passwords. The server has no Edge session, and the iPhone session from 17 November is still alive and synced today. The bug was the UI: the only Sign in button was on the Sync screen, "Sign in again" had no way back, and Sign out was hidden behind the region name.
+
+| Bug | Sev | Status | Before | After (local) |
+| --- | --- | --- | --- | --- |
+| S-3 no way out of "sign-in needed" | P0 | FIXED | M18 and M19 FAIL: no Sign in in the status bar, no account link on Sync (`signout3/before-m18-m19.log`) | M18 and M19 PASS (`signout3/after-m18-m19.log`) |
+
 ## Done
 
 1. QA rows cleaned, `npm run verify` passed twice in a row (12/12, 6/6).

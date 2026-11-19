@@ -212,3 +212,5 @@ A06 only covered a session that ends while offline. Each M case uses its own thr
 | M15 | P0 | Three records made offline (one with a photo, one wildlife), refresh failing | Outbox unchanged while failing; all three and the photo upload by themselves within 30 s of the reconnect |
 | M16 | P1 | Service worker and auth | No `/auth/v1/` request made by or answered from the worker; Cache Storage holds no auth entry and nothing from another origin |
 | M17 | P0 | One refresh answered 429, 400 `bad_json` or an HTML 403 (three runs) | Session still stored, record syncs within 150 s, never a sign-in |
+| M18 | P0 | Laptop (1280x800): the server ends the session while a record is pending | Status bar shows a Sign in button on Records. "Sign in again" has the email filled and "Not now" returns to the records with the record still pending. One sign-in from the bar uploads it, and the button goes away |
+| M19 | P1 | Phone: Sign out from the Sync screen and from "Sign in again" | Sync links to Regions and its Sign out button. After the server ends the session, "Sign out and use another account" leads to an empty sign-in, and another account signs in |

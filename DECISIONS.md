@@ -106,6 +106,16 @@ Evidence for M-1 in `artifacts/fix/signout2/README.md`, for the UI in `artifacts
 73. **Add photo opens the phone's photo menu directly.** The file input has no `capture`, so iOS and Android offer camera, library and files, several photos at once. The tap no longer awaits a permission query before `click()` (Safari drops the user gesture after an `await`); the camera state is watched in advance (`watchPermission`). Only a camera permission that reads `denied` still leads to the Permissions screen, as C05 requires. A file input does not need the camera permission, so this gate is stricter than needed; it is kept because C05 tests it and the Permissions screen also offers "Choose from library".
 74. **A saved track opens as its own screen**, `#/track/<id>`, instead of the small sheet with Close and Delete: the recorder card of the GPS tracks design, read-only (status, date, duration, plot, KM, points, average accuracy), start and end times, and every point. Delete track moved there, with the same confirmation. D08 reaches Delete through that screen; the rest of D08 is unchanged.
 
+## Round 3: stuck on "sign-in needed" with no way out (19 November 2026)
+
+Evidence in `artifacts/fix/signout3/README.md`.
+
+75. **The owner's laptop really needed one sign-in, and the app hid the way to do it.** The screenshot came from Edge at laptop width. It shows "Online / sign-in needed to sync", a last sync at 19:42, and a record still pending from 20:45. The server has no Edge session for any demo account. The iPhone session from 17 November is alive, refreshed by itself on 19 November and synced `ok`. No demo password changed after 16 November 16:49 UTC. So the laptop's session most likely ended on 16 November, when the old seed still reset the demo passwords (decision 57). That was a real refusal, so "sign-in needed" was correct. The only button for it sat on the Sync screen. "Sign in again" had no way back, and Sign out could only be reached through the region name above the list. A probe on the real server also showed that a refresh token retried 0 s, 12 s and 57 s after its answer was lost still works (`reuse-probe.txt`), so a dropped answer does not end a session.
+76. **The status bar carries a Sign in button whenever "sign-in needed" shows.** It is on every app screen and at every width, and opens `#/signin/again` with the email filled in.
+77. **"Sign in again" offers "Not now, back to my records" and "Sign out and use another account".** The first returns to the records without a password; the pending work stays and keeps retrying. The second uses the same confirmation as Regions (`src/js/leave.js`) and leads to a plain sign-in.
+78. **The Sync screen links to "Regions and sign out"**, so Sign out is one tap from a tab at any width.
+79. **M18 and M19 added.** Both fail on the old code for the targeted reason: M18 finds no Sign in button in the status bar, and M19 finds no account link on the Sync screen (`signout3/before-m18-m19.log`). Both pass after the change.
+
 ## Design screens and their built counterparts
 
 | # | Design file | Built as |
