@@ -3,7 +3,7 @@ import { html, render, hhmm } from '../html.js';
 import { db, getMeta, setMeta } from '../db.js';
 import { conflicts, profileNames, regions } from '../queries.js';
 import { formatLabel, fieldLabel } from '../merge.js';
-import { restoreRecord, updateRecord, resolveConflict } from '../store.js';
+import { restoreRecord } from '../store.js';
 import { currentUser } from '../auth.js';
 
 function show(v) {
@@ -35,17 +35,6 @@ export async function mount(el) {
       const label = rec ? formatLabel(rec.type, rec.seq) : 'Record';
       const editable = regionList.find((r) => r.id === g.region_id)?.role !== 'viewer';
       if (g.kind === 'same_field') {
-        let decision = '';
-        if (g.resolved) {
-          decision = html`<p class="small muted" style="margin-top:10px" data-decision="${g.resolution ?? 'reviewed'}">${g.resolution === 'rejected'
-            ? `Rejected: ${show(g.lost_value)} put back.` : g.resolution === 'accepted' ? `Accepted: ${show(g.kept_value)} kept.` : 'Reviewed.'}</p>`;
-        } else if (editable && rec && !rec.deleted) {
-          decision = html`<p class="small muted" style="margin-top:10px">Accept keeps ${show(g.kept_value)}. Reject puts ${show(g.lost_value)} back on every device.</p>
-            <div class="grid2" style="margin-top:8px">
-              <button class="btn secondary" data-accept="${g.id}">Accept</button>
-              <button class="btn" data-reject="${g.id}">Reject</button>
-            </div>`;
-        }
         rows.push(html`
           <li class="row" data-conflict="${g.id}" data-kind="same_field" data-record-id="${g.record_id}">
             <div class="row-top"><span class="label">${label} / ${fieldLabel(g.field)}</span><span class="label">${hhmm(g.at)}</span></div>
@@ -54,7 +43,6 @@ export async function mount(el) {
               <div class="kept"><div class="label">Kept / ${who(g.kept_by, g.kept_device)}</div><div class="reading" data-kept>${show(g.kept_value)}</div></div>
               <div class="lost"><div class="label">Overwritten / ${who(g.lost_by, g.lost_device)}</div><div class="reading" data-lost>${show(g.lost_value)}</div></div>
             </div>
-            ${decision}
           </li>`);
       } else {
         const fields = Object.fromEntries(g.items.map((c) => [c.field, c.lost_value]));
@@ -66,11 +54,8 @@ export async function mount(el) {
               : 'Record deleted on another device. The delete wins.'}</p>
             ${g.items.map((c) => html`<div class="quote" data-lost>${g.lost_by === me ? 'Your edit' : `Edit by ${who(g.lost_by, g.lost_device)}`}: ${fieldLabel(c.field)} ${show(c.lost_value)}</div>`)}
             ${g.items.every((c) => c.resolved)
-              ? html`<p class="small muted" style="margin-top:10px" data-decision="${g.resolution ?? 'restored'}">${g.resolution === 'accepted' ? 'Accepted: the record stays deleted.' : 'Restored.'}</p>`
-              : editable && rec ? html`<div class="grid2" style="margin-top:10px">
-                  <button class="btn secondary" data-accept="${g.id}">Accept delete</button>
-                  <button class="btn" data-restore="${g.record_id}" data-fields="${JSON.stringify(fields)}">Restore record</button>
-                </div>` : ''}
+              ? html`<p class="small muted" style="margin-top:10px">Restored.</p>`
+              : editable && rec ? html`<button class="btn secondary block" style="margin-top:10px" data-restore="${g.record_id}" data-fields="${JSON.stringify(fields)}">Restore record</button>` : ''}
           </li>`);
       }
     }
@@ -86,32 +71,6 @@ export async function mount(el) {
   }
 
   el.addEventListener('click', async (ev) => {
-    // Accept: the kept value (or the delete) stands; the entry is marked reviewed.
-    // Reject: the overwritten value is written again as a normal edit of this
-    // device, so it reaches every device through the usual sync and merge.
-    const decide = ev.target.closest('[data-accept], [data-reject]');
-    if (decide) {
-      decide.disabled = true;
-      const id = decide.dataset.accept ?? decide.dataset.reject;
-      const list = await conflicts();
-      const c = list.find((x) => x.id === id);
-      if (!c) return;
-      if (decide.dataset.reject !== undefined) {
-        const rec = await db.records.get(c.record_id);
-        if (!rec) return;
-        // Every other field as it is: only this one is queued (diffFields).
-        await updateRecord(c.record_id, { fields: { ...rec.fields, [c.field]: c.lost_value } });
-        await resolveConflict(c, 'rejected');
-      } else {
-        // An edit against a deleted record can be logged as several entries.
-        const same = c.kind === 'edit_vs_delete'
-          ? list.filter((x) => x.kind === 'edit_vs_delete' && x.record_id === c.record_id && x.at === c.at && x.lost_device === c.lost_device && !x.resolved)
-          : [c];
-        for (const x of same) await resolveConflict(x, 'accepted');
-      }
-      await paint();
-      return;
-    }
     const btn = ev.target.closest('[data-restore]');
     if (!btn) return;
     btn.disabled = true;

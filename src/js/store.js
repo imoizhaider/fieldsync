@@ -153,11 +153,9 @@ export async function restoreRecord(id, fields = {}) {
   changed();
 }
 
-// `resolution` ('accepted' or 'rejected') is only remembered on this device, for
-// the label in the conflict log; the server just records that it was reviewed.
-export async function resolveConflict(conflict, resolution = null) {
+export async function resolveConflict(conflict) {
   await db.transaction('rw', db.meta, db.outbox, async () => {
-    const list = (await getMeta('conflicts', [])).map((c) => (c.id === conflict.id ? { ...c, resolved: true, ...(resolution ? { resolution } : {}) } : c));
+    const list = (await getMeta('conflicts', [])).map((c) => (c.id === conflict.id ? { ...c, resolved: true } : c));
     await setMeta('conflicts', list);
     await db.outbox.add(outboxEntry('conflict_log', 'resolve', conflict.id, { regionId: conflict.region_id }));
   });

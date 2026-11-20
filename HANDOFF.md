@@ -57,16 +57,6 @@ npm run verify
 - **"Sign-in needed" now appears only if the server really ended the session** (password changed, account removed). It goes away by itself if a later refresh is accepted; otherwise use **Sign in again** on the Sync screen.
 - `npm run seed` was run at the end of this round: tables are empty, the three demo accounts exist, their sessions are kept.
 
-## After round 4 (20 November 2026): conflicts and phone photos
-
-- **Conflict log:**
-  - **Accept** keeps the value that won.
-  - **Reject** puts the overwritten value back on every device.
-  - For a deleted record, **Accept delete** keeps it deleted, and **Restore record** brings it back.
-  - The app still applies the newest value first; a person then decides.
-- **Photos on a phone:** Add photo opens the phone's menu (camera or library). If the site's camera is blocked, the Permissions screen shows; **Try again** there opens the camera anyway.
-- **Manual check on the iPhone:** take one photo and pick one from the library, on New record and on Edit. If anything fails, send a screenshot of the red message under the photos.
-
 ## After round 3 (19 November 2026): the way out of "sign-in needed"
 
 - **Laptop that shows "Online / sign-in needed to sync":** press **Sign in** at the right of the red bar and type the password once. Its session ended on 16 November, when the old seed still reset passwords. After that one sign-in it stays signed in until Sign out. Pending records upload right away.

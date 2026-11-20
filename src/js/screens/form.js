@@ -4,7 +4,7 @@ import { db } from '../db.js';
 import { currentRegion, regions, canEdit } from '../queries.js';
 import { TYPES, formatLabel, parseReading } from '../merge.js';
 import { createRecord, updateRecord, proposedSeq } from '../store.js';
-import { compressPhoto, getPoint, watchPermission, PHOTO_MAX_SIDE, UNREADABLE_PHOTO } from '../device.js';
+import { compressPhoto, getPoint, watchPermission, PHOTO_MAX_SIDE } from '../device.js';
 
 // The draft lives outside the screen so it survives a trip to the
 // permissions view and back.
@@ -132,8 +132,8 @@ export async function mount(el, params) {
         <p class="pad muted small" style="padding-top:12px">Permissions are set in the browser, not in fieldsync.</p>
         ${d.error ? html`<p class="pad error-text small" role="alert" style="padding-top:8px">${d.error}</p>` : ''}
       </div>
-      <input type="file" accept="image/*" capture="environment" multiple class="file-input" tabindex="-1" aria-hidden="true" id="camera-input">
-      <input type="file" accept="image/*" multiple class="file-input" tabindex="-1" aria-hidden="true" id="library-input">`);
+      <input type="file" accept="image/*" capture="environment" multiple hidden id="camera-input">
+      <input type="file" accept="image/*" multiple hidden id="library-input">`);
   }
 
   function paint() {
@@ -196,27 +196,18 @@ export async function mount(el, params) {
         <button class="btn block" data-act="save" id="save-record" ${d.busy || !d.editable ? 'disabled' : ''}>${d.mode === 'new' ? 'Save to device' : 'Save changes'}</button>
         <p class="foot-note">Stored locally. Uploads on reconnect.</p>
       </div>
-      <input type="file" accept="image/*" capture="environment" multiple class="file-input" tabindex="-1" aria-hidden="true" id="camera-input">
-      <input type="file" accept="image/*" multiple class="file-input" tabindex="-1" aria-hidden="true" id="library-input">`);
+      <input type="file" accept="image/*" capture="environment" multiple hidden id="camera-input">
+      <input type="file" accept="image/*" multiple hidden id="library-input">`);
   }
 
   async function addFiles(files) {
     if (!files || files.length === 0) return;
     d.busy = true; d.error = null;
     paint();
-    // Each file on its own: one unreadable file (a video, a document) must not
-    // drop the good photos picked with it.
-    let bad = 0;
-    for (const file of files) {
-      try {
-        d.photos.push(await compressPhoto(file));
-      } catch {
-        bad += 1;
-      }
-    }
-    if (bad > 0) {
-      d.error = files.length === 1 ? UNREADABLE_PHOTO
-        : `${bad} of ${files.length} files could not be added. ${UNREADABLE_PHOTO}`;
+    try {
+      for (const file of files) d.photos.push(await compressPhoto(file));
+    } catch (err) {
+      d.error = err.message || 'A photo could not be added.';
     }
     d.busy = false;
     if (d.view === 'permissions') { go(d.mode === 'new' ? '#/new' : `#/edit/${d.id}`); return; }
@@ -279,12 +270,12 @@ export async function mount(el, params) {
     if (act === 'library') { el.querySelector('#library-input').click(); return; }
     if (act === 'add-photo' || act === 'camera-retry') {
       // No await before click(): see watchPermission above.
-      // A blocked camera leads to the Permissions view first (C05).
-      if (act === 'add-photo' && d.camera === 'denied') { go('#/permissions'); return; }
+      if (d.camera === 'denied') {
+        if (d.view === 'permissions') paint(); else go('#/permissions');
+        return;
+      }
       // Add opens the phone's own photo menu (take a photo, or pick from the
-      // library, several at once). "Try again" opens the camera even while the
-      // site's camera permission reads "blocked": a file input does not use that
-      // permission, the phone's own camera app takes the photo.
+      // library, several at once). "Try again" on the Permissions view opens the camera.
       el.querySelector(act === 'add-photo' ? '#library-input' : '#camera-input').click();
     }
   });
