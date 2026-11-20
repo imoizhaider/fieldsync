@@ -1,5 +1,5 @@
 // GPS tracks: record a walk as a list of points, plotted with no basemap.
-import { html, render, clock, go } from '../html.js';
+import { html, render, clock, go, hhmm } from '../html.js';
 import { db, uuid } from '../db.js';
 import { currentRegion, canEdit } from '../queries.js';
 import { formatLabel, trackDistance } from '../merge.js';
@@ -68,6 +68,16 @@ export function plot(points) {
     <circle cx="${xy[0][0]}" cy="${xy[0][1]}" r="5" fill="#111A15"/><circle cx="${last[0]}" cy="${last[1]}" r="6" fill="#c0392b"/></svg>`;
 }
 
+// Every point of the walk, as on the saved track screen.
+const deg = (v, pos, neg) => (typeof v === 'number' ? `${Math.abs(v).toFixed(5)} ${v >= 0 ? pos : neg}` : '--');
+function pointList(points) {
+  return html`<div class="section-label ruled" style="margin-top:8px">Points / ${points.length}</div>
+    <ol class="point-list" id="live-points-list">
+      ${points.map((p, i) => html`<li><span class="n">${i + 1}</span><span class="t">${hhmm(p.t)}</span>
+        <span class="ll">${deg(p.lat, 'n', 's')}, ${deg(p.lng, 'e', 'w')}</span><span class="acc">+/- ${p.acc ?? '--'} m</span></li>`)}
+    </ol>`;
+}
+
 export async function mount(el) {
   let timer = null;
   let off = null;
@@ -120,6 +130,7 @@ export async function mount(el) {
             <button class="btn block" data-act="start" id="start-track">Start recording</button>` : html`
             <div class="notice"><b>${region.name} is view only.</b> Tracks cannot be recorded here.</div>`}
         </div>
+        ${active ? pointList(rec.points) : ''}
         <div class="section-label ruled" style="margin-top:8px">Saved / ${saved.length}</div>
         <ul class="rows" id="track-list">
           ${saved.map((g) => html`
