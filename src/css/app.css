@@ -98,6 +98,16 @@ body.no-nav #nav { display: none; }
 @media (max-width: 767px) {
   body.tabless #nav { display: none; }
   body.tabless .foot { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  /* Tracks on a phone: the recorder card filled the screen, so Start / Stop
+     and the saved tracks sat below the fold. Idle, the empty grid is hidden;
+     recording, the card is compact. */
+  #recorder .top { padding: 8px 14px 0; }
+  #recorder .clock { font-size: 26px; padding: 0 14px 4px; }
+  #recorder .plot { height: 96px; }
+  #recorder .caption { padding: 0 14px 4px; font-size: 11px; }
+  #recorder .stats > div { padding: 6px 14px; }
+  #recorder .stats .num { font-size: 18px; }
+  #recorder[data-status="idle"] .plot, #recorder[data-status="idle"] .caption { display: none; }
 }
 /* Short phones (Safari on a 667 px iPhone with its toolbars): the fixed bottom
    bars give their height back to the screen, so the form's photo row and the
